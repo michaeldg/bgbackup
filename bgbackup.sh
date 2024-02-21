@@ -557,7 +557,16 @@ else
     mail_log
     exit 1
 fi
- 
+
+# Check if we are not running too long (when the disk is full or locked, bgbackup can be stuck
+runtime=`/usr/bin/ps -o etimes= -p "$$"`
+if [ $runtime -gt 300 ]; then
+    log_info "The script was started more then 5 minutes ago, something is wrong."
+    log_status=FAILED
+    mail_log
+    exit 1
+fi
+
 # Check that we are not already running
 
 lockfile=/tmp/bgbackup.lock
