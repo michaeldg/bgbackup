@@ -457,15 +457,16 @@ function config_check {
 
 function galera_check {
     if [ "$galera" == "yes" ]; then
+        num_sst_processes=`ps aux|grep wsrep_sst|grep -v grep|wc -l`
+        if [ "$num_sst_processes" -gt 0  ]; then
+            log_error "SST currently in progress, not creating a backup now"
+        fi
+
         if [ "$galera_minimum_nodes" -gt 0 ] ; then
             current_nodes=$mysqlcommand -Be "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'"|grep wsrep_cluster|awk '{print $2}'
             if [ "$galera_minimum_nodes" -gt "$current_nodes" ]; then
                 log_error "Not enough nodes are participating in the Galera cluster, therefore not creating a backup now"
             fi
-        fi
-        num_sst_processes=`ps aux|grep wsrep_sst|grep -v grep|wc -l`
-        if [ "$num_sst_processes" -gt 0  ]; then
-            log_error "SST currently in progress, not creating a backup now"
         fi
     fi
 }
