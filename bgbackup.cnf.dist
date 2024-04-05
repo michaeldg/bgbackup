@@ -125,6 +125,10 @@ rocksdb=yes
 # disabling wsrep_desync. 
 galera=no
 
+# Only start when there are enough Galera nodes available. 
+# Only applies when 'galera'='yes'.
+galera_minimum_nodes=3
+
 # Include slave info?
 # WARNING: If slave info is included and nolock is enabled, bgbackup will enable safe-slave-backup. 
 # (safe slave backups will temporarily pause replication. Please inspect the documentation if your application cannot handle stale reads.)
