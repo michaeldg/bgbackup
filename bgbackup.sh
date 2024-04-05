@@ -463,7 +463,7 @@ function galera_check {
         fi
 
         if [ "$galera_minimum_nodes" -gt 0 ] ; then
-            current_nodes=$mysqlcommand -Be "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'"|grep wsrep_cluster|awk '{print $2}'
+            current_nodes=`mysql -u$backupuser -p$backuppass -Be "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'"|grep wsrep_cluster|awk '{print $2}'`
             if [ "$galera_minimum_nodes" -gt "$current_nodes" ]; then
                 log_error "Not enough nodes are participating in the Galera cluster, therefore not creating a backup now"
             fi
