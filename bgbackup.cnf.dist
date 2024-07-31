@@ -74,6 +74,9 @@ keepnum=3
 # Number of backup table backups to keep.
 keepbkuptblnum=1
 
+# Number of log files to keep.
+keeplognum=1000
+
 # Full path to backup directory root
 backupdir=/backups
 
