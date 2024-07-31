@@ -443,10 +443,10 @@ function mdbutil_backup_cleanup {
 # Function to cleanup logs
 function log_cleanup {
     if [ $log_status = "SUCCEEDED" ]; then
-        delloglist=$(ls -tp "$logpath/bgbackup*" | tail -n +$((keeplognum+=1)))
+        delloglist=$(ls -tp "$logpath" | grep bgbackup | tail -n +$((keeplognum+=1)))
         for logtodelete in $delloglist; do
-            rm -f "$logdir"/"$logtodelete"
-            log_info "Deleted log file $logtodelete"
+            rm -f "$logpath"/"$logtodelete"
+            log_info "Deleted log file $logpath/$logtodelete"
         done
     else
         log_info "Backup failed. Not deleting any log files at this time."
