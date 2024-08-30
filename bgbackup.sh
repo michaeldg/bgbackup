@@ -397,8 +397,8 @@ EOF
 
 # Function to cleanup backups.
 function backup_cleanup {
-    if [ $log_status = "SUCCEEDED" ]; then
-        limitoffset=$((keepnum-1))
+    if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
+        limitoffset=$((keepnum))
         delcountcmd=$mysqlcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
         delcount=$(eval "$delcountcmd")
         if [ "$delcount" -gt 0 ]; then
