@@ -12,8 +12,8 @@ backuptool=1
 # we recommend 20.000 to make sure there is enough.
 openfilelimit=0
 
-# for multi-instance support, a different defaults file may be specified
-defaults_file=/etc/my.cnf
+# for multi-instance support, a different defaults file may be specified (optional, default os default)
+# defaults_file=/etc/my.cnf
 
 # MariaDB/MySQL/Percona host (optional)
 #host=127.0.0.1
@@ -30,8 +30,8 @@ backupuser=testuser
 # MariaDB/MySQL/Percona backup user password
 backuppass=testpass
 
-# for multi-instance support, a different defaults file may be specified
-backuphist_defaults_file=/etc/my.cnf
+# for multi-instance support, a different defaults file may be specified (optional, default os default)
+# backuphist_defaults_file=/etc/my.cnf
 
 # MariaDB/MySQL/Percona host for backup history
 backuphisthost=localhost

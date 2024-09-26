@@ -61,7 +61,7 @@ function  log_error() {
 function innocreate {
     mhost=$(hostname)
     innocommand="$innobackupex"
-    innocommand=$innocommand" --defaults-file=$defaults_file"
+    [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
     if [ "$backuptool" == "1" ] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
     alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
@@ -237,7 +237,7 @@ function backup_prepare {
 function mysqlhistcreate {
     mysql=$(command -v mysql)
     mysqlhistcommand="$mysql"
-    mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
+    [ -n "$backuphist_defaults_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
     mysqlhistcommand=$mysqlhistcommand" -u$backuphistuser"
     mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
     mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
@@ -249,7 +249,7 @@ function mysqlhistcreate {
 function mysqltargetcreate {
     mysql=$(command -v mysql)
     mysqltargetcommand="$mysql"
-    mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
+    [ -n "$defaults_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
     mysqltargetcommand=$mysqltargetcommand" -u$backupuser"
     mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
     mysqltargetcommand=$mysqltargetcommand" -h $host"
@@ -262,7 +262,7 @@ function mysqltargetcreate {
 function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
     mysqldumpcommand="$mysqldump"
-    mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
+    [ -n "$backuphist_defaults_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
     mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
     mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
