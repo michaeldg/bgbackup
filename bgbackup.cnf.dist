@@ -2,46 +2,47 @@
 
 # bgbackup configuration file
 
-# Check for Percona backup history records to migrate?
-# If yes, be warned that backups which meet the current
-# delete threshold will be deleted. Backups which have
-# already been deleted will be marked with deleted_at
-# as today's date.
-checkmigrate=no
+# Which backup utility is being used, MariaBackup or Xtrabackup?
+# MariaDB Backup = 1
+# XtraBackup = 2
+backuptool=1
+
+# for multi-instance support, a different defaults file may be specified
+defaults_file=/etc/my.cnf
 
 # Some times the backuptool requires a high amount of open files.
 # Use this parameter to set the open file limit to a certain value, 
 # we recommend 20.000 to make sure there is enough.
 openfilelimit=0
 
-# MariaDB host (optional)
+# MariaDB/MySQL/Percona host (optional)
 #host=127.0.0.1
 
-# MariaDB host port (optional)
+# MariaDB/MySQL/Percona host port (optional)
 #hostport=3306
 
-# MySQL socket
+# MariaDB/MySQL/Percona socket
 # socket=/var/lib/mysql/mysql.sock
 
-# MariaDB backup username
+# MariaDB/MySQL/Percona backup username
 backupuser=testuser
 
-# MariaDB backup user password
+# MariaDB/MySQL/Percona backup user password
 backuppass=testpass
 
-# MariaDB host for backup history
+# MariaDB/MySQL/Percona host for backup history
 backuphisthost=localhost
 
-# MariaDB port for backup history
+# MariaDB/MySQL/Percona port for backup history
 #backuphistport=3306
 
-# MariaDB user for backup history
+# MariaDB/MySQL/Percona user for backup history
 backuphistuser=mariadbbackup
 
-# MariaDB password for backup history
+# MariaDB/MySQL/Percona password for backup history
 backuphistpass=testpass
 
-# MariaDB schema for backup history
+# MariaDB/MySQL/Percona schema for backup history
 backuphistschema=mdbutil
 
 # If server is monitored by MONyog, should we disable alerts?
@@ -123,14 +124,18 @@ nolock=no
 # If you don't use RocksDB you can disable this to speed up the backup process.
 rocksdb=yes
 
-# Include Galera info and enable wsrep_desync to avoid flow control during backup.
+# Include Galera/XtraDB Cluster info and enable wsrep_desync to avoid flow control during backup.
 # When the backup is finished, wait for wsrep_local_recv_queue to drop to 0 before
 # disabling wsrep_desync. 
 galera=no
 
-# Only start when there are enough Galera nodes available. 
+# Only start when there are enough Galera/XtraDB Cluster nodes available. 
 # Only applies when 'galera'='yes'.
 galera_minimum_nodes=3
+
+# Run a preflight check script. If this script does not echo "OK" the backup process does not start.
+# Input parameter: Path to bgbackup configuration file
+preflight_script="echo 'OK' || echo"
 
 # Include slave info?
 # WARNING: If slave info is included and nolock is enabled, bgbackup will enable safe-slave-backup. 

@@ -8,8 +8,6 @@
 # As an additional term ALL code must carry the original Author(s) credit in comment form.
 # See LICENSE in this directory for the integral text.
 
-
-
 # Functions
 
 # Handle control-c
@@ -17,7 +15,7 @@ function sigint {
   echo "SIGINT detected. Exiting"
   if [ "$galera" = yes ] ; then
       log_info "Disabling WSREP desync on exit"
-      mysql -u "$backupuser" -p"$backuppass" -e "SET GLOBAL wsrep_desync=OFF;"
+      $mysqlhistcommand" \"SET GLOBAL wsrep_desync=OFF;\" "
   fi
   # 130 is the standard exit code for SIGINT
   exit 130
@@ -65,9 +63,9 @@ function innocreate {
     innocommand="$innobackupex"
     if [ "$backuptool" == "1" ] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
-    alreadyfullcmd=$mysqlcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL\" "
+    alreadyfullcmd=$mysqlhistcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL\" "
     alreadyfull=$(eval "$alreadyfullcmd")
-    anyfullcmd=$mysqlcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL\" "
+    anyfullcmd=$mysqlhistcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL\" "
     anyfull=$(eval "$anyfullcmd")
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] ; then
@@ -77,7 +75,7 @@ function innocreate {
         else
             if [ "$differential" = yes ] ; then
                 butype=Differential
-                diffbasecmd=$mysqlcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1\" "
+                diffbasecmd=$mysqlhistcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1\" "
                 diffbase=$(eval "$diffbasecmd")
                 dirname="$backupdir/diff-$dirdate"
                 innocommand="$innocommand $dirname"
@@ -85,7 +83,7 @@ function innocreate {
                 innocommand=$innocommand" --incremental-basedir=$diffbase"
             else
                 butype=Incremental
-                incbasecmd=$mysqlcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1\" "
+                incbasecmd=$mysqlhistcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1\" "
                 incbase=$(eval "$incbasecmd")
                 dirname="$backupdir/incr-$dirdate"
                 innocommand="$innocommand $dirname"
@@ -184,7 +182,7 @@ function backer_upper {
     fi
     if [ "$galera" = yes ] ; then
         log_info "Enabling WSREP desync."
-        mysql -u "$backupuser" -p"$backuppass" -e "SET GLOBAL wsrep_desync=ON;"
+        $mysqltargetcommand "SET GLOBAL wsrep_desync=ON"
     fi
     log_info "Beginning ${butype} Backup"
     log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=.* /password=XXX /g')"
@@ -203,10 +201,11 @@ function backer_upper {
         log_info "Disabling WSREP desync."
         queue=1
         until [ "$queue" -eq 0 ]; do
-            queue=$(mysql -u "$backupuser" -p"$backuppass" -ss -e "show global status like 'wsrep_local_recv_queue';" | awk '{ print $2 }')
+            queue=$($mysqltargetcommand" \"show global status like 'wsrep_local_recv_queue';\" -ss" | awk '{ print $2 }')
+            echo "Current queue is $queue, if there is still a queue we wait until we disable desync mode"
             sleep 10
         done
-        mysql -u "$backupuser" -p"$backuppass" -e "SET GLOBAL wsrep_desync=OFF;"
+        $mysqltargetcommand "SET GLOBAL wsrep_desync=OFF;"
     fi
     if [ "$monyog" = yes ] ; then
         log_info "Enabling MONyog alerts"
@@ -237,18 +236,28 @@ function backup_prepare {
     log_info "Archiving complete."
 }
 
-# Function to build mysql command
-function mysqlcreate {
+# Function to build mysql history command
+function mysqlhistcreate {
     mysql=$(command -v mysql)
-    mysqlcommand="$mysql"
-    mysqlcommand=$mysqlcommand" -u $backuphistuser"
-    mysqlcommand=$mysqlcommand" -p$backuphistpass"
-    mysqlcommand=$mysqlcommand" -h $backuphisthost"
-    [ -n "$backuphistport" ] && mysqlcommand=$mysqlcommand" -P $backuphistport"
-    mysqlcommand=$mysqlcommand" -Bse "
+    mysqlhistcommand="$mysql"
+    mysqlhistcommand=$mysqlhistcommand" -u $backuphistuser"
+    mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
+    mysqlhistcommand=$mysqlhistcommand" -h $backuphisthost"
+    [ -n "$backuphistport" ] && mysqlhistcommand=$mysqlhistcommand" -P $backuphistport"
+    mysqlhistcommand=$mysqlhistcommand" -Bse "
+}
+# Function to build mysql target command
+function mysqltargetcreate {
+    mysql=$(command -v mysql)
+    mysqltargetcommand="$mysql"
+    mysqltargetcommand=$mysqltargetcommand" -u $backuphistuser"
+    mysqltargetcommand=$mysqltargetcommand" -p$backuphistpass"
+    mysqltargetcommand=$mysqltargetcommand" -h $backuphisthost"
+    [ -n "$backuphistport" ] && mysqltargetcommand=$mysqltargetcommand" -P $backuphistport"
+    mysqltargetcommand=$mysqltargetcommand" -Bse "
 }
 
-# Function to build mysqldump command
+# Function to build mysqldump command on history database
 function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
     mysqldumpcommand="$mysqldump"
@@ -288,13 +297,13 @@ PRIMARY KEY (uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 EOF
 )
-    $mysqlcommand "$createtable" >> "$logfile"
+    $mysqlhistcommand "$createtable" >> "$logfile"
     log_info "backup history table created"
 }
 
 # Function to check if Percona backup history records exist and need migrated
 function check_migrate {
-    perconacnt=$($mysqlcommand "SELECT COUNT(a.uuid) FROM PERCONA_SCHEMA.xtrabackup_history a LEFT JOIN $backuphistschema.backup_history b ON a.uuid = b.uuid WHERE b.uuid IS NULL;")
+    perconacnt=$($mysqlhistcommand "SELECT COUNT(a.uuid) FROM PERCONA_SCHEMA.xtrabackup_history a LEFT JOIN $backuphistschema.backup_history b ON a.uuid = b.uuid WHERE b.uuid IS NULL;")
     if [ "$perconacnt" -gt 0 ];
     then
         log_info "$perconacnt Percona backup history records not migrated. Migrating."
@@ -338,21 +347,21 @@ SELECT
 FROM PERCONA_SCHEMA.xtrabackup_history
 EOF
 )
-    $mysqlcommand "$migratesql" >> "$logfile"
+    $mysqlhistcommand "$migratesql" >> "$logfile"
 
-    $mysqlcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE deleted_at IS NULL" |
+    $mysqlhistcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE deleted_at IS NULL" |
         while read -r uuid bulocation; do
         if test -d "$bulocation"
         then
-            $mysqlcommand "UPDATE $backuphistschema.backup_history SET deleted_at = '0000-00-00 00:00:00' WHERE uuid = '$uuid' "
+            $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = '0000-00-00 00:00:00' WHERE uuid = '$uuid' "
         else
-            $mysqlcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE uuid = '$uuid' "
+            $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE uuid = '$uuid' "
         fi
     done
 
 
 
-    lefttomigratecnt=$($mysqlcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE deleted_at IS NULL")
+    lefttomigratecnt=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE deleted_at IS NULL")
     if [ "$lefttomigratecnt" -gt 0 ];
     then
         log_info "Something went wrong, some migrated records not updated correctly."
@@ -365,7 +374,7 @@ EOF
 
 # Function to write backup history to database
 function backup_history {
-    versioncommand=$mysqlcommand" \"SELECT @@version\" "
+    versioncommand=$mysqlhistcommand" \"SELECT @@version\" "
     server_version=$(eval "$versioncommand")
     xtrabackup_version=$(($innobackupex -version) 2>&1)
     if [ "$backuptool" == "2" ] ; then xtrabackup_version=$(cat "$logfile" | grep "/bin/innobackupex version") ; fi
@@ -381,9 +390,9 @@ INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_ti
 VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 EOF
 )
-    $mysqlcommand "$historyinsert"
+    $mysqlhistcommand "$historyinsert"
     #verify insert
-    verifyinsert=$($mysqlcommand "select count(*) from $backuphistschema.backup_history where hostname='$mhost' and end_time='$endtime'")
+    verifyinsert=$($mysqlhistcommand "select count(*) from $backuphistschema.backup_history where hostname='$mhost' and end_time='$endtime'")
     if [ "$verifyinsert" -eq 1 ]; then
         log_info "Backup history database record inserted successfully."
     else
@@ -399,13 +408,13 @@ EOF
 function backup_cleanup {
     if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
         limitoffset=$((keepnum-1))
-        delcountcmd=$mysqlcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
+        delcountcmd=$mysqlhistcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
         delcount=$(eval "$delcountcmd")
         if [ "$delcount" -gt 0 ]; then
-            deletecmd=$mysqlcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
+            deletecmd=$mysqlhistcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
             eval "$deletecmd" | while read -r todelete; do
                 log_info "Deleted backup $todelete"
-                markdeletedcmd=$mysqlcommand" \"UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED' \" "
+                markdeletedcmd=$mysqlhistcommand" \"UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED' \" "
                 rm -Rf "$todelete"
                 eval "$markdeletedcmd"
             done
@@ -476,7 +485,7 @@ function galera_check {
         fi
 
         if [ "$galera_minimum_nodes" -gt 0 ] ; then
-            current_nodes=`mysql -u$backupuser -p$backuppass -Be "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'"|grep wsrep_cluster|awk '{print $2}'`
+            current_nodes=$($mysqltargetcommand "SHOW GLOBAL STATUS LIKE 'wsrep_cluster_size'"|grep wsrep_cluster|awk '{print $2}')
             if [ "$galera_minimum_nodes" -gt "$current_nodes" ]; then
                 log_error "Not enough nodes are participating in the Galera cluster, therefore not creating a backup now"
             fi
@@ -484,8 +493,20 @@ function galera_check {
     fi
 }
 
+function preflight_check {
+    preflight_return_value=$(eval "$preflight_script" 2>&1)
+    if [ "$preflight_return_value" != "OK" ]; then
+        echo "Preflight script did not return OK, preflight check output:"
+        echo "$preflight_return_value"
+        log_error "Not creating a backup because preflight check failed"
+    else
+        echo "Preflight check was OK, proceeding to take backup"
+    fi
+}
+
 # Debug variables function
 function debugme {
+    echo "defaults file: " "$defaults_file"
     echo "host: " "$host"
     echo "hostport: " "$hostport"
     echo "backupuser: " "$backupuser"
@@ -534,9 +555,10 @@ function debugme {
 # we trap control-c
 trap sigint INT
 
-# find and source the config file
-etccnf=$( find /etc -name bgbackup.cnf )
 scriptdir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+# find and source the config file
+etccnf=${1:-/etc/bgbackup.cnf}
+
 if [ -e "$etccnf" ]; then
     source "$etccnf"
 elif [ -e "$scriptdir"/bgbackup.cnf ]; then
@@ -619,10 +641,10 @@ fi
 trap 'rm -f $lockfile' 0
 touch $lockfile
 
-mysqlcreate
+mysqlhistcreate
 
 # Check that mysql client can connect
-$mysqlcommand "SELECT 1 FROM DUAL" 1>/dev/null
+$mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null
 if [ "$?" -eq 1 ]; then
   log_info "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
   log_status=FAILED
@@ -631,7 +653,7 @@ if [ "$?" -eq 1 ]; then
 fi
 
 # Check that the database exists before continuing further
-$mysqlcommand "USE $backuphistschema"
+$mysqlhistcommand "USE $backuphistschema"
 if [ "$?" -eq 1 ]; then
     echo "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
     log_info "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
@@ -640,7 +662,7 @@ if [ "$?" -eq 1 ]; then
     exit 1
 fi
 
-check_table=$($mysqlcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
+check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
 if [ "$check_table" -eq 0 ]; then
     create_history_table # Create history table if it doesn't exist
 fi
@@ -652,6 +674,8 @@ fi
 config_check # Check vital configuration parameters
 
 galera_check # Check if minimum nodes are available on Galera cluster
+
+preflight_check # Run preflight check script to stop (for example) stop backup from running on primary nodes
 
 backer_upper # Execute the backup.
 
