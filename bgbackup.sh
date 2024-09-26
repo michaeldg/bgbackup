@@ -61,12 +61,11 @@ function  log_error() {
 function innocreate {
     mhost=$(hostname)
     innocommand="$innobackupex"
+    innocommand=$innocommand" --defaults-file=$defaults_file"
     if [ "$backuptool" == "1" ] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
-    alreadyfullcmd=$mysqlhistcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL\" "
-    alreadyfull=$(eval "$alreadyfullcmd")
-    anyfullcmd=$mysqlhistcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL\" "
-    anyfull=$(eval "$anyfullcmd")
+    alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
+    anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] ; then
             butype=Full
@@ -75,16 +74,14 @@ function innocreate {
         else
             if [ "$differential" = yes ] ; then
                 butype=Differential
-                diffbasecmd=$mysqlhistcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1\" "
-                diffbase=$(eval "$diffbasecmd")
+                diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 dirname="$backupdir/diff-$dirdate"
                 innocommand="$innocommand $dirname"
                 if [ "$backuptool" == "2" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$diffbase"
             else
                 butype=Incremental
-                incbasecmd=$mysqlhistcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1\" "
-                incbase=$(eval "$incbasecmd")
+                incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 dirname="$backupdir/incr-$dirdate"
                 innocommand="$innocommand $dirname"
                 if [ "$backuptool" == "2" ] ; then innocommand=$innocommand" --incremental" ; fi
@@ -240,20 +237,24 @@ function backup_prepare {
 function mysqlhistcreate {
     mysql=$(command -v mysql)
     mysqlhistcommand="$mysql"
-    mysqlhistcommand=$mysqlhistcommand" -u $backuphistuser"
+    mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
+    mysqlhistcommand=$mysqlhistcommand" -u$backuphistuser"
     mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
-    mysqlhistcommand=$mysqlhistcommand" -h $backuphisthost"
+    mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
     [ -n "$backuphistport" ] && mysqlhistcommand=$mysqlhistcommand" -P $backuphistport"
+    [ -n "$backuphistsocket" ] && mysqltargetcommand=$mysqltargetcommand" -S $backuphistsocket"
     mysqlhistcommand=$mysqlhistcommand" -Bse "
 }
 # Function to build mysql target command
 function mysqltargetcreate {
     mysql=$(command -v mysql)
     mysqltargetcommand="$mysql"
-    mysqltargetcommand=$mysqltargetcommand" -u $backuphistuser"
-    mysqltargetcommand=$mysqltargetcommand" -p$backuphistpass"
-    mysqltargetcommand=$mysqltargetcommand" -h $backuphisthost"
-    [ -n "$backuphistport" ] && mysqltargetcommand=$mysqltargetcommand" -P $backuphistport"
+    mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
+    mysqltargetcommand=$mysqltargetcommand" -u$backupuser"
+    mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
+    mysqltargetcommand=$mysqltargetcommand" -h $host"
+    [ -n "$hostport" ] && mysqltargetcommand=$mysqltargetcommand" -P $hostport"
+    [ -n "$socket" ] && mysqltargetcommand=$mysqltargetcommand" -S $socket"
     mysqltargetcommand=$mysqltargetcommand" -Bse "
 }
 
@@ -261,10 +262,12 @@ function mysqltargetcreate {
 function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
     mysqldumpcommand="$mysqldump"
+    mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
     mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
     mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
     [ -n "$backuphistport" ] && mysqldumpcommand=$mysqldumpcommand" -P $backuphistport"
+    [ -n "$backuphistsocket" ] && mysqlhistcommand=$mysqlhistcommand" -S $backuphistsocket"
     mysqldumpcommand=$mysqldumpcommand" $backuphistschema"
     mysqldumpcommand=$mysqldumpcommand" backup_history"
 }
@@ -301,82 +304,11 @@ EOF
     log_info "backup history table created"
 }
 
-# Function to check if Percona backup history records exist and need migrated
-function check_migrate {
-    perconacnt=$($mysqlhistcommand "SELECT COUNT(a.uuid) FROM PERCONA_SCHEMA.xtrabackup_history a LEFT JOIN $backuphistschema.backup_history b ON a.uuid = b.uuid WHERE b.uuid IS NULL;")
-    if [ "$perconacnt" -gt 0 ];
-    then
-        log_info "$perconacnt Percona backup history records not migrated. Migrating."
-        migrate
-    fi
-}
-
-# Function to migrate percona backup history records
-function migrate {
-    migratesql=$(cat <<EOF
-INSERT INTO $backuphistschema.backup_history (
-  uuid,
-  hostname,
-  start_time,
-  end_time,
-  bulocation,
-  status,
-  butype,
-  compressed,
-  encrypted,
-  xtrabackup_version
-  )
-SELECT
-  uuid,
-  name,
-  start_time,
-  end_time,
-  SUBSTRING_INDEX(SUBSTRING_INDEX(tool_command, ' ', 1), ' ', -1) as backupdirV,
-  CASE
-    WHEN partial = 'N' THEN 'SUCCEEDED'
-    ELSE 'FAILED'
-    END AS statusV,
-  CASE
-    WHEN incremental = 'Y' THEN 'Incremental'
-    WHEN incremental = 'N' THEN 'Full'
-    ELSE null
-    END AS butypeV,
-  compressed,
-  encrypted,
-  concat('MIGRATED FROM PERCONA_SCHEMA - ',tool_version)
-FROM PERCONA_SCHEMA.xtrabackup_history
-EOF
-)
-    $mysqlhistcommand "$migratesql" >> "$logfile"
-
-    $mysqlhistcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE deleted_at IS NULL" |
-        while read -r uuid bulocation; do
-        if test -d "$bulocation"
-        then
-            $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = '0000-00-00 00:00:00' WHERE uuid = '$uuid' "
-        else
-            $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE uuid = '$uuid' "
-        fi
-    done
-
-
-
-    lefttomigratecnt=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE deleted_at IS NULL")
-    if [ "$lefttomigratecnt" -gt 0 ];
-    then
-        log_info "Something went wrong, some migrated records not updated correctly."
-        exit 1
-    else
-        log_info "$perconacnt Percona backup history records migrated."
-    fi
-
-}
 
 # Function to write backup history to database
 function backup_history {
-    versioncommand=$mysqlhistcommand" \"SELECT @@version\" "
-    server_version=$(eval "$versioncommand")
-    xtrabackup_version=$(($innobackupex -version) 2>&1)
+    server_version=$($mysqlhistcommand "SELECT @@version")
+    xtrabackup_version=$($innobackupex -version 2>&1)
     if [ "$backuptool" == "2" ] ; then xtrabackup_version=$(cat "$logfile" | grep "/bin/innobackupex version") ; fi
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
@@ -408,15 +340,13 @@ EOF
 function backup_cleanup {
     if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
         limitoffset=$((keepnum-1))
-        delcountcmd=$mysqlhistcommand" \"SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
-        delcount=$(eval "$delcountcmd")
+        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
         if [ "$delcount" -gt 0 ]; then
-            deletecmd=$mysqlhistcommand" \"SELECT bulocation FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL\" "
+            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
             eval "$deletecmd" | while read -r todelete; do
                 log_info "Deleted backup $todelete"
-                markdeletedcmd=$mysqlhistcommand" \"UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED' \" "
                 rm -Rf "$todelete"
-                eval "$markdeletedcmd"
+                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
             done
         else
             log_info "No backups to delete at this time."
@@ -496,57 +426,58 @@ function galera_check {
 function preflight_check {
     preflight_return_value=$(eval "$preflight_script" 2>&1)
     if [ "$preflight_return_value" != "OK" ]; then
-        echo "Preflight script did not return OK, preflight check output:"
-        echo "$preflight_return_value"
+        log_info "Preflight script did not return OK, preflight check output:"
+        log_info "$preflight_return_value"
         log_error "Not creating a backup because preflight check failed"
     else
-        echo "Preflight check was OK, proceeding to take backup"
+        log_info "Preflight check was OK, proceeding to take backup"
     fi
 }
 
 # Debug variables function
 function debugme {
-    echo "defaults file: " "$defaults_file"
-    echo "host: " "$host"
-    echo "hostport: " "$hostport"
-    echo "backupuser: " "$backupuser"
-    echo "backuppass: " "$backuppass"
-    echo "bktype: " "$bktype"
-    echo "arctype: " "$arctype"
-    echo "monyog: " "$monyog"
-    echo "monyogserver: " "$monyogserver"
-    echo "monyoguser: " "$monyoguser"
-    echo "monyogpass: " "$monyogpass"
-    echo "monyoghost: " "$monyoghost"
-    echo "monyogport: " "$monyogport"
-    echo "fullbackday: " "$fullbackday"
-    echo "keepday: " "$keepday"
-    echo "backupdir: " "$backupdir"
-    echo "logpath: " "$logpath"
-    echo "threads: " "$threads"
-    echo "parallel: " "$parallel"
-    echo "encrypt: " "$encrypt"
-    echo "cryptkey: " "$cryptkey"
-    echo "nolock: " "$nolock"
-    echo "compress: " "$compress"
-    echo "tempfolder: " "$tempfolder"
-    echo "galera: " "$galera"
-    echo "slave: " "$slave"
-    echo "maillist: " "$maillist"
-    echo "mailsubpre: " "$mailsubpre"
-    echo "mdate: " "$mdate"
-    echo "logfile: " "$logfile"
-    echo "queue: " "$queue"
-    echo "butype: " "$butype"
-    echo "log_status: " "$log_status"
-    echo "budirdate: " "$budirdate"
-    echo "innocommand: " "$innocommand"
-    echo "prepcommand: " "$prepcommand"
-    echo "dirname: " "$dirname"
-    echo "mhost: " "$mhost"
-    echo "budir: " "$budir"
-    echo "run_after_success: " "$run_after_success"
-    echo "run_after_fail: " "$run_after_fail"
+    log_info "defaults file: " "$defaults_file"
+    log_info "backuphist defaults file: " "$backuphist_defaults_file"
+    log_info "host: " "$host"
+    log_info "hostport: " "$hostport"
+    log_info "backupuser: " "$backupuser"
+    log_info "backuppass: " "$backuppass"
+    log_info "bktype: " "$bktype"
+    log_info "arctype: " "$arctype"
+    log_info "monyog: " "$monyog"
+    log_info "monyogserver: " "$monyogserver"
+    log_info "monyoguser: " "$monyoguser"
+    log_info "monyogpass: " "$monyogpass"
+    log_info "monyoghost: " "$monyoghost"
+    log_info "monyogport: " "$monyogport"
+    log_info "fullbackday: " "$fullbackday"
+    log_info "keepday: " "$keepday"
+    log_info "backupdir: " "$backupdir"
+    log_info "logpath: " "$logpath"
+    log_info "threads: " "$threads"
+    log_info "parallel: " "$parallel"
+    log_info "encrypt: " "$encrypt"
+    log_info "cryptkey: " "$cryptkey"
+    log_info "nolock: " "$nolock"
+    log_info "compress: " "$compress"
+    log_info "tempfolder: " "$tempfolder"
+    log_info "galera: " "$galera"
+    log_info "slave: " "$slave"
+    log_info "maillist: " "$maillist"
+    log_info "mailsubpre: " "$mailsubpre"
+    log_info "mdate: " "$mdate"
+    log_info "logfile: " "$logfile"
+    log_info "queue: " "$queue"
+    log_info "butype: " "$butype"
+    log_info "log_status: " "$log_status"
+    log_info "budirdate: " "$budirdate"
+    log_info "innocommand: " "$innocommand"
+    log_info "prepcommand: " "$prepcommand"
+    log_info "dirname: " "$dirname"
+    log_info "mhost: " "$mhost"
+    log_info "budir: " "$budir"
+    log_info "run_after_success: " "$run_after_success"
+    log_info "run_after_fail: " "$run_after_fail"
 }
 
 ############################################
@@ -556,6 +487,7 @@ function debugme {
 trap sigint INT
 
 scriptdir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+
 # find and source the config file
 etccnf=${1:-/etc/bgbackup.cnf}
 
@@ -611,6 +543,8 @@ if [ "$backuptool" == "1" ] && command -v mariabackup >/dev/null; then
     innobackupex=$(command -v mariabackup)
 elif [ "$backuptool" == "2" ] && command -v innobackupex >/dev/null; then
     innobackupex=$(command -v innobackupex)
+elif [ "$backuptool" == "2" ] && command -v xtrabackup >/dev/null; then
+    innobackupex=$(command -v xtrabackup)  # Percona xtrabackup 8.0 phased out innobackupex command
 else
     echo "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
     log_info "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
@@ -647,6 +581,10 @@ mysqlhistcreate
 $mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null
 if [ "$?" -eq 1 ]; then
   log_info "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
+  if [ "$debug" = yes ] ; then
+    debugme
+    echo "$mysqlhistcommand"
+  fi
   log_status=FAILED
   mail_log
   exit 1
@@ -665,10 +603,6 @@ fi
 check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
 if [ "$check_table" -eq 0 ]; then
     create_history_table # Create history table if it doesn't exist
-fi
-
-if [ "$checkmigrate" = yes ] ; then
-    check_migrate # Check if Percona backup history records exist and migrate if needed
 fi
 
 config_check # Check vital configuration parameters

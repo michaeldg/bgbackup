@@ -7,13 +7,13 @@
 # XtraBackup = 2
 backuptool=1
 
-# for multi-instance support, a different defaults file may be specified
-defaults_file=/etc/my.cnf
-
 # Some times the backuptool requires a high amount of open files.
 # Use this parameter to set the open file limit to a certain value, 
 # we recommend 20.000 to make sure there is enough.
 openfilelimit=0
+
+# for multi-instance support, a different defaults file may be specified
+defaults_file=/etc/my.cnf
 
 # MariaDB/MySQL/Percona host (optional)
 #host=127.0.0.1
@@ -30,8 +30,14 @@ backupuser=testuser
 # MariaDB/MySQL/Percona backup user password
 backuppass=testpass
 
+# for multi-instance support, a different defaults file may be specified
+backuphist_defaults_file=/etc/my.cnf
+
 # MariaDB/MySQL/Percona host for backup history
 backuphisthost=localhost
+
+# MariaDB/MySQL/Percona socket for backup history
+# backuphistsocket=/var/lib/mysql/mysql.sock
 
 # MariaDB/MySQL/Percona port for backup history
 #backuphistport=3306
@@ -83,9 +89,6 @@ backupdir=/backups
 
 # Path to keep logs
 logpath=/var/log
-
-# Log verbosity
-verbose=no
 
 # Log to syslog
 syslog=no
@@ -153,7 +156,7 @@ mailon=all
 
 # Run command(s) after backup, for example: run_on_success=/usr/local/bin/success.sh
 # (leave empty if you do not want to run anything)
-# If backup succedded
+# If backup succeeded
 run_after_success=
 # If backup failed
 run_after_fail=
@@ -161,5 +164,9 @@ run_after_fail=
 # Debug prints all variables to the commandline when script is ran.
 # This can be a security risk. Set to yes to enable.
 debug=no
+
+# Verbosity prints the log to stdout as well as to the log file
+verbose=no
+
 
 ############################################
