@@ -15,6 +15,9 @@ openfilelimit=0
 # for multi-instance support, a different defaults file may be specified (optional, default os default)
 # defaults_file=/etc/my.cnf
 
+# For multi-instance support, you can optionally specify a name of the instance. This name is used in the history table and in the log file name.
+# instance_name=my_33062
+
 # MariaDB/MySQL/Percona host (optional)
 #host=127.0.0.1
 

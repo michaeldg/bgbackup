@@ -60,6 +60,7 @@ function  log_error() {
 # Function to create innobackupex/mariabackup command
 function innocreate {
     mhost=$(hostname)
+    [ -n "$instance_name" ] && mhost=$mhost"-$instance_name"
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
     if [ "$backuptool" == "1" ] ; then innocommand=$innocommand" --backup --target-dir" ; fi
