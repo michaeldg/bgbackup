@@ -565,10 +565,13 @@ fi
 
 # Check that we are not already running
 
-lockfile=/tmp/bgbackup.lock
+lockfile=/tmp/bgbackup
+[ -n "$instance_name" ] && lockfile=$lockfile"-$instance_name"
+lockfile=$lockfile".lock"
+
 if [ -f $lockfile ]
 then
-    log_info "Another instance of bgbackup is already running. Exiting."
+    log_info "Another instance of $lockfile is already running. Exiting."
     log_status=FAILED
     mail_log
     exit 1
