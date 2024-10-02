@@ -237,11 +237,10 @@ function backup_prepare {
 # Function to build mysql history command
 function mysqlhistcreate {
     mysql=$(command -v mysql)
-    mysqlhistcommand="$mysql"
+    mysqlhistcommand="MYSQLPWD='$backuphistpass' $mysql"
     [ -n "$backuphist_defaults_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
     mysqlhistcommand=$mysqlhistcommand" -u$backuphistuser"
-    mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
-    [ -n "$backuphisthost"] && mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
+    [ -n "$backuphisthost" ] && mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
     [ -n "$backuphistport" ] && mysqlhistcommand=$mysqlhistcommand" -P $backuphistport"
     [ -n "$backuphistsocket" ] && mysqltargetcommand=$mysqltargetcommand" -S $backuphistsocket"
     mysqlhistcommand=$mysqlhistcommand" -Bse "
@@ -249,10 +248,9 @@ function mysqlhistcreate {
 # Function to build mysql target command
 function mysqltargetcreate {
     mysql=$(command -v mysql)
-    mysqltargetcommand="$mysql"
+    mysqltargetcommand="MYSQLPWD='$backuppass' $mysql"
     [ -n "$defaults_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
     mysqltargetcommand=$mysqltargetcommand" -u$backupuser"
-    mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
     [ -n "$host" ] && mysqltargetcommand=$mysqltargetcommand" -h $host"
     [ -n "$hostport" ] && mysqltargetcommand=$mysqltargetcommand" -P $hostport"
     [ -n "$socket" ] && mysqltargetcommand=$mysqltargetcommand" -S $socket"
@@ -262,10 +260,9 @@ function mysqltargetcreate {
 # Function to build mysqldump command on history database
 function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
-    mysqldumpcommand="$mysqldump"
+    mysqldumpcommand="MYSQLPWD='$backuphistpass' $mysqldump"
     [ -n "$backuphist_defaults_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
-    mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
     [ -n "$backuphisthost" ] && mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
     [ -n "$backuphistport" ] && mysqldumpcommand=$mysqldumpcommand" -P $backuphistport"
     [ -n "$backuphistsocket" ] && mysqlhistcommand=$mysqlhistcommand" -S $backuphistsocket"
@@ -405,6 +402,14 @@ function config_check {
         log_status=FAILED
         mail_log
         exit 1
+    fi
+
+    if [ "$galera" = "yes" ]; then
+        has_galera=$($mysqltargetcommand "SHOW GLOBAL VARIABLES LIKE 'wsrep_provider_options'" | grep 'wsrep_provider'|grep 'libgalera' | wc -l)
+        if [ "$has_galera" -eq 0 ]; then
+            log_info "Disabling galera flow control is enabled, but galera library is not loaded. Not disabling galera flow control."
+            galera="not found"
+        fi
     fi
 }
 
@@ -608,6 +613,8 @@ check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables 
 if [ "$check_table" -eq 0 ]; then
     create_history_table # Create history table if it doesn't exist
 fi
+
+mysqltargetcreate
 
 config_check # Check vital configuration parameters
 
