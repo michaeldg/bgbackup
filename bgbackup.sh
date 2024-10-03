@@ -589,6 +589,8 @@ touch $lockfile
 
 mysqlhistcreate
 
+mysqltargetcreate
+
 # Check that mysql client can connect
 $mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null
 if [ "$?" -eq 1 ]; then
