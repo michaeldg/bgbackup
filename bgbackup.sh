@@ -237,10 +237,11 @@ function backup_prepare {
 # Function to build mysql history command
 function mysqlhistcreate {
     mysql=$(command -v mysql)
-    mysqlhistcommand="MYSQLPWD='$backuphistpass' $mysql"
+    mysqlhistcommand="$mysql"
     [ -n "$backuphist_defaults_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
     mysqlhistcommand=$mysqlhistcommand" -u$backuphistuser"
     [ -n "$backuphisthost" ] && mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
+    [ -n "$backuphistpass" ] && mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
     [ -n "$backuphistport" ] && mysqlhistcommand=$mysqlhistcommand" -P $backuphistport"
     [ -n "$backuphistsocket" ] && mysqltargetcommand=$mysqltargetcommand" -S $backuphistsocket"
     mysqlhistcommand=$mysqlhistcommand" -Bse "
@@ -248,10 +249,11 @@ function mysqlhistcreate {
 # Function to build mysql target command
 function mysqltargetcreate {
     mysql=$(command -v mysql)
-    mysqltargetcommand="MYSQLPWD='$backuppass' $mysql"
+    mysqltargetcommand="$mysql"
     [ -n "$defaults_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
     mysqltargetcommand=$mysqltargetcommand" -u$backupuser"
     [ -n "$host" ] && mysqltargetcommand=$mysqltargetcommand" -h $host"
+    [ -n "$backuppass" ] && mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
     [ -n "$hostport" ] && mysqltargetcommand=$mysqltargetcommand" -P $hostport"
     [ -n "$socket" ] && mysqltargetcommand=$mysqltargetcommand" -S $socket"
     mysqltargetcommand=$mysqltargetcommand" -Bse "
@@ -260,12 +262,13 @@ function mysqltargetcreate {
 # Function to build mysqldump command on history database
 function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
-    mysqldumpcommand="MYSQLPWD='$backuphistpass' $mysqldump"
+    mysqldumpcommand="$mysqldump"
     [ -n "$backuphist_defaults_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
     [ -n "$backuphisthost" ] && mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
+    [ -n "$backuphistpass" ] && mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
     [ -n "$backuphistport" ] && mysqldumpcommand=$mysqldumpcommand" -P $backuphistport"
-    [ -n "$backuphistsocket" ] && mysqlhistcommand=$mysqlhistcommand" -S $backuphistsocket"
+    [ -n "$backuphistsocket" ] && mysqldumpcommand=$mysqldumpcommand" -S $backuphistsocket"
     mysqldumpcommand=$mysqldumpcommand" $backuphistschema"
     mysqldumpcommand=$mysqldumpcommand" backup_history"
 }
