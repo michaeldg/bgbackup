@@ -63,7 +63,7 @@ function innocreate {
     [ -n "$instance_name" ] && mhost=$mhost"-$instance_name"
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
-    if [ "$backuptool" == "1" ] ; then innocommand=$innocommand" --backup --target-dir" ; fi
+    if [[ "$backuptool" == "1" || $innobackupex == *"/xtrabackup"* ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
     alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
     anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
