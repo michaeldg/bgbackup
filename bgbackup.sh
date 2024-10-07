@@ -15,7 +15,7 @@ function sigint {
   echo "SIGINT detected. Exiting"
   if [ "$galera" = yes ] ; then
       log_info "Disabling WSREP desync on exit"
-      $mysqlhistcommand" \"SET GLOBAL wsrep_desync=OFF;\" "
+      $mysqltargetcommand "SET GLOBAL wsrep_desync=OFF"
   fi
   # 130 is the standard exit code for SIGINT
   exit 130
@@ -180,7 +180,7 @@ function backer_upper {
     fi
     if [ "$galera" = yes ] ; then
         log_info "Enabling WSREP desync."
-        $mysqltargetcommand "SET GLOBAL wsrep_desync=ON"
+        $mysqltargetcommand "SET GLOBAL qlsrep_desync=ON"
     fi
     log_info "Beginning ${butype} Backup"
     log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=.* /password=XXX /g')"
@@ -265,6 +265,7 @@ function mysqldumpcreate {
     mysqldumpcommand="$mysqldump"
     [ -n "$backuphist_defaults_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
+    mysqldumpcommand=$mysqldumpcommand" --loose-no-tablespaces"  # MySQL 8.0.21 compatibility
     [ -n "$backuphisthost" ] && mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
     [ -n "$backuphistpass" ] && mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
     [ -n "$backuphistport" ] && mysqldumpcommand=$mysqldumpcommand" -P $backuphistport"
