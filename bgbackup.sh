@@ -180,7 +180,7 @@ function backer_upper {
     fi
     if [ "$galera" = yes ] ; then
         log_info "Enabling WSREP desync."
-        $mysqltargetcommand "SET GLOBAL qlsrep_desync=ON"
+        $mysqltargetcommand "SET GLOBAL wsrep_desync=ON"
     fi
     log_info "Beginning ${butype} Backup"
     log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=.* /password=XXX /g')"
