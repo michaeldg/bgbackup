@@ -63,7 +63,7 @@ function innocreate {
     [ -n "$instance_name" ] && mhost=$mhost"-$instance_name"
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
-    if [[ "$backuptool" == "1" || $innobackupex == *"/xtrabackup"* ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
+    if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
     alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
     anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
@@ -78,14 +78,14 @@ function innocreate {
                 diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 dirname="$backupdir/diff-$dirdate"
                 innocommand="$innocommand $dirname"
-                if [ "$backuptool" == "2" ] ; then innocommand=$innocommand" --incremental" ; fi
+                if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$diffbase"
             else
                 butype=Incremental
                 incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 dirname="$backupdir/incr-$dirdate"
                 innocommand="$innocommand $dirname"
-                if [ "$backuptool" == "2" ] ; then innocommand=$innocommand" --incremental" ; fi
+                if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$incbase"
             fi
         fi
@@ -128,13 +128,13 @@ function innocreate {
             if [ "$differential" = yes ] ; then
                 butype=Differential
                 innocommand=$innocommand" $tempfolder --stream=$arctype"
-                if [ "$backuptool" == "2" ] ; then innocommand=$innocommand" --incremental" ; fi
+                if [ "$has_innobackupex == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$backupdir/.lsn_full --extra-lsndir=$backupdir/.lsn"
                 arcname="$backupdir/diff-$dirdate.$arctype.gz"
             else
                 butype=Incremental
                 innocommand=$innocommand" $tempfolder --stream=$arctype"
-                if [ "$backuptool" == "2" ] ; then innocommand=$innocommand" --incremental" ; fi
+                if [ "$has_innobackupex == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$backupdir/.lsn --extra-lsndir=$backupdir/.lsn"
                 arcname="$backupdir/inc-$dirdate.$arctype.gz"
             fi
@@ -550,10 +550,13 @@ fi
 # Check for mariabackup or xtrabackup
 if [ "$backuptool" == "1" ] && command -v mariabackup >/dev/null; then
     innobackupex=$(command -v mariabackup)
+    has_innobackupex=0
 elif [ "$backuptool" == "2" ] && command -v innobackupex >/dev/null; then
     innobackupex=$(command -v innobackupex)
+    has_innobackupex=1
 elif [ "$backuptool" == "2" ] && command -v xtrabackup >/dev/null; then
     innobackupex=$(command -v xtrabackup)  # Percona xtrabackup 8.0 phased out innobackupex command
+    has_innobackupex=0
 else
     echo "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
     log_info "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
