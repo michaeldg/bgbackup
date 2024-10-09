@@ -363,7 +363,7 @@ function mdbutil_backup {
     if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ]; then
         mysqldumpcreate
         mdbutildumpfile="$backupdir"/"$backuphistschema".backup_history-"$dirdate".sql
-        $mysqldumpcommand > "$mdbutildumpfile"
+        $mysqldumpcommand > "$mdbutildumpfile" 2>/dev/null
         log_info "Backup history table dumped to $mdbutildumpfile"
     fi
 }
