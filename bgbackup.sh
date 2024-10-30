@@ -63,6 +63,7 @@ function innocreate {
     [ -n "$instance_name" ] && mhost=$mhost"-$instance_name"
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
+    [ -n "$defaults_extra_file" ] && innocommand=$innocommand" --defaults-file=$defaults_extra_file"
     if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
     alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
@@ -239,6 +240,7 @@ function mysqlhistcreate {
     mysql=$(command -v mysql)
     mysqlhistcommand="$mysql"
     [ -n "$backuphist_defaults_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
+    [ -n "$backuphist_defaults_extra_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_extra_file"
     mysqlhistcommand=$mysqlhistcommand" -u$backuphistuser"
     [ -n "$backuphisthost" ] && mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
     [ -n "$backuphistpass" ] && mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
@@ -251,6 +253,7 @@ function mysqltargetcreate {
     mysql=$(command -v mysql)
     mysqltargetcommand="$mysql"
     [ -n "$defaults_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
+    [ -n "$defaults_extra_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_extra_file"
     mysqltargetcommand=$mysqltargetcommand" -u$backupuser"
     [ -n "$host" ] && mysqltargetcommand=$mysqltargetcommand" -h $host"
     [ -n "$backuppass" ] && mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
@@ -264,6 +267,7 @@ function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
     mysqldumpcommand="$mysqldump"
     [ -n "$backuphist_defaults_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
+    [ -n "$backuphist_defaults_extra_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_extra_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
     mysqldumpcommand=$mysqldumpcommand" --loose-no-tablespaces"  # MySQL 8.0.21 compatibility
     [ -n "$backuphisthost" ] && mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
