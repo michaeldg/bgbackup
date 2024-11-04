@@ -78,16 +78,31 @@ function innocreate {
                 butype=Differential
                 diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 dirname="$backupdir/diff-$dirdate"
-                innocommand="$innocommand $dirname"
-                if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
-                innocommand=$innocommand" --incremental-basedir=$diffbase"
+
+                if [ -d "$diffbase" ]; then
+                    innocommand="$innocommand $dirname"
+                    if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
+                    innocommand=$innocommand" --incremental-basedir=$diffbase"
+                else
+                    log_info "WARNING! Differential basedir $diffbase does not exist! Creating full backup instead."
+                    butype=Full
+                    dirname="$backupdir/full-$dirdate"
+                    innocommand="$innocommand $dirname"
+                fi
             else
                 butype=Incremental
                 incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
-                dirname="$backupdir/incr-$dirdate"
-                innocommand="$innocommand $dirname"
-                if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
-                innocommand=$innocommand" --incremental-basedir=$incbase"
+                if [ -d "$incbase" ]; then
+                    dirname="$backupdir/incr-$dirdate"
+                    innocommand="$innocommand $dirname"
+                    if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
+                    innocommand=$innocommand" --incremental-basedir=$incbase"
+                else
+                    log_info "WARNING! Incremental basedir $incbase does not exist! Creating full backup instead."
+                    butype=Full
+                    dirname="$backupdir/full-$dirdate"
+                    innocommand="$innocommand $dirname"
+                fi
             fi
         fi
     elif [ "$bktype" = "archive" ] ; then
