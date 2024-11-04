@@ -23,7 +23,7 @@ function sigint {
 
 # Mail function
 function mail_log {
-    mail -s "$mailsubpre $HOSTNAME Backup $log_status $mdate" "$maillist" < "$logfile"
+    mail -s "$mailsubpre $HOSTNAME $instance_name:-mysql Backup $log_status $mdate" "$maillist" < "$logfile"
 }
 
 # Function to check log for okay
