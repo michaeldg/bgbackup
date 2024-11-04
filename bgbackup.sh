@@ -416,7 +416,7 @@ function config_check {
         has_galera=$($mysqltargetcommand "SHOW GLOBAL VARIABLES LIKE 'wsrep_provider_options'" | grep 'wsrep_provider'|grep 'libgalera' | wc -l)
         if [ "$has_galera" -eq 0 ]; then
             log_info "Disabling galera flow control is enabled, but galera library is not loaded. Not disabling galera flow control."
-            galera="not found"
+            galera="error"
         fi
     fi
 }
