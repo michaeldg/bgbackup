@@ -14,10 +14,10 @@ openfilelimit=0
 
 # for multi-instance support, a different defaults file may be specified (optional, default os default)
 # defaults_file=/etc/my.cnf
+# To avoid passing the password on the CLI, we recommend to add the password in the defaults file, and !include /etc/my.cnf (or equivalent) from there. defaults-extra-file causes some issues, custom socket path and port is not honored.
 
-# To support password authentication without passing the password on the CLI, specify an extra credentials file:
-# credentials_file=/root/.my.cnf
-# When both credentials and defaults_file are specified, the defaults file will be loaded as defaults-extra-file and the credentials file will be loaded as defaults file.
+# If you really want to use defaults-extra-file, this is the way:
+# defaults_extra_file=/root/.my.cnf
 
 # For multi-instance support, you can optionally specify a name of the instance. This name is used in the history table and in the log file name.
 # instance_name=my_33062
@@ -39,10 +39,10 @@ backuppass=testpass
 
 # for multi-instance support, a different defaults file may be specified (optional, default os default)
 # backuphist_defaults_file=/etc/my.cnf
+# To avoid passing the password on the CLI, we recommend to add the password in the defaults file, and !include /etc/my.cnf (or equivalent) from there. defaults-extra-file causes some issues, custom socket path and port is not honored.
 
-# To support password authentication to the backup history server without passing the password on the CLI, specify a credentials file:
-# backuphist_credentials_file=/root/my.cnf
-# When both are specified, the defaults file will be loaded as defaults-extra-file and the credentials file will be loaded as defaults file.
+# If you really want to use defaults-extra-file for the backup history server connection, this is the way:
+# backuphist_defaults_extra_file=/root/.my.cnf
 
 # MariaDB/MySQL/Percona host for backup history
 backuphisthost=localhost
