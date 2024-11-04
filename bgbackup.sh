@@ -451,7 +451,9 @@ function preflight_check {
 # Debug variables function
 function debugme {
     log_info "defaults file: " "$defaults_file"
+    log_info "defaults extra file: " "$defaults_extra_file"
     log_info "backuphist defaults file: " "$backuphist_defaults_file"
+    log_info "backuphist defaults extra file: " "$backuphist_defaults_extra_file"
     log_info "host: " "$host"
     log_info "hostport: " "$hostport"
     log_info "backupuser: " "$backupuser"
