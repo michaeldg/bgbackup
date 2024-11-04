@@ -62,16 +62,8 @@ function innocreate {
     mhost=$(hostname)
     [ -n "$instance_name" ] && mhost=$mhost"-$instance_name"
     innocommand="$innobackupex"
-
-    if [[ -n "$defaults_file" && -n "$credentials_file" ]]; then
-        innocommand=$innocommand" --defaults-file=$credentials_file --defaults-extra-file=$defaults_file"
-    elif [[ -n "$defaults_file" ]]; then
-        innocommand=$innocommand" --defaults-file=$defaults_file"
-    elif [[ -n "$credentials_file" ]]; then
-        innocommand=$innocommand" --defaults-file=$credentials_file"
-    fi
-
-
+    [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
+    [ -n "$defaults_extra_file" ] && innocommand=$innocommand" --defaults-file=$defaults_extra_file"
     if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
     alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
@@ -151,7 +143,7 @@ function innocreate {
     fi
     if [ -n "$databases" ] && [ "$bktype" = "prepared-archive" ]; then innocommand=$innocommand" --databases=$databases"; fi
     [ ! -z "$backupuser" ] && innocommand=$innocommand" --user=$backupuser"
-    [[ -n "$backuppass" && -z "$credentials_file" ]] && innocommand=$innocommand" --password=$backuppass"
+    [ ! -z "$backuppass" ] && innocommand=$innocommand" --password=$backuppass"
     [ ! -z "$socket" ] && innocommand=$innocommand" --socket=$socket"
     [ ! -z "$host" ] && innocommand=$innocommand" --host=$host"
     [ ! -z "$hostport" ] && innocommand=$innocommand" --port=$hostport"
@@ -247,16 +239,11 @@ function backup_prepare {
 function mysqlhistcreate {
     mysql=$(command -v mysql)
     mysqlhistcommand="$mysql"
-    if [[ -n "$backuphist_defaults_file" && -n "$backuphist_credentials_file" ]]; then
-        mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_credentials_file --defaults-extra-file=$backuphist_defaults_file"
-    elif [[ -n "$backuphist_defaults_file" ]]; then
-        mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
-    elif [[ -n "$backuphist_credentials_file" ]]; then
-        mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_credentials_file"
-    fi
+    [ -n "$backuphist_defaults_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_file"
+    [ -n "$backuphist_defaults_extra_file" ] && mysqlhistcommand=$mysqlhistcommand" --defaults-file=$backuphist_defaults_extra_file"
     mysqlhistcommand=$mysqlhistcommand" -u$backuphistuser"
     [ -n "$backuphisthost" ] && mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
-    [[ -n "$backuphistpass" && -z "$backuphist_credentials_file" ]] && mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
+    [ -n "$backuphistpass" ] && mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
     [ -n "$backuphistport" ] && mysqlhistcommand=$mysqlhistcommand" -P $backuphistport"
     [ -n "$backuphistsocket" ] && mysqltargetcommand=$mysqltargetcommand" -S $backuphistsocket"
     mysqlhistcommand=$mysqlhistcommand" -Bse "
@@ -265,16 +252,11 @@ function mysqlhistcreate {
 function mysqltargetcreate {
     mysql=$(command -v mysql)
     mysqltargetcommand="$mysql"
-    if [[ -n "$defaults_file" && -n "$credentials_file" ]]; then
-        innocommand=$innocommand" --defaults-file=$credentials_file --defaults-extra-file=$defaults_file"
-    elif [[ -n "$defaults_file" ]]; then
-        innocommand=$innocommand" --defaults-file=$defaults_file"
-    elif [[ -n "$credentials_file" ]]; then
-        innocommand=$innocommand" --defaults-file=$credentials_file"
-    fi
+    [ -n "$defaults_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_file"
+    [ -n "$defaults_extra_file" ] && mysqltargetcommand=$mysqltargetcommand" --defaults-file=$defaults_extra_file"
     mysqltargetcommand=$mysqltargetcommand" -u$backupuser"
     [ -n "$host" ] && mysqltargetcommand=$mysqltargetcommand" -h $host"
-    [[ -n "$backuppass" && -z "$credentials_file" ]] && mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
+    [ -n "$backuppass" ] && mysqltargetcommand=$mysqltargetcommand" -p$backuppass"
     [ -n "$hostport" ] && mysqltargetcommand=$mysqltargetcommand" -P $hostport"
     [ -n "$socket" ] && mysqltargetcommand=$mysqltargetcommand" -S $socket"
     mysqltargetcommand=$mysqltargetcommand" -Bse "
@@ -284,17 +266,12 @@ function mysqltargetcreate {
 function mysqldumpcreate {
     mysqldump=$(command -v mysqldump)
     mysqldumpcommand="$mysqldump"
-    if [[ -n "$backuphist_defaults_file" && -n "$backuphist_credentials_file" ]]; then
-        mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_credentials_file --defaults-extra-file=$backuphist_defaults_file"
-    elif [[ -n "$backuphist_defaults_file" ]]; then
-        mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
-    elif [[ -n "$backuphist_credentials_file" ]]; then
-        mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_credentials_file"
-    fi
+    [ -n "$backuphist_defaults_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_file"
+    [ -n "$backuphist_defaults_extra_file" ] && mysqldumpcommand=$mysqldumpcommand" --defaults-file=$backuphist_defaults_extra_file"
     mysqldumpcommand=$mysqldumpcommand" -u $backuphistuser"
     mysqldumpcommand=$mysqldumpcommand" --loose-no-tablespaces"  # MySQL 8.0.21 compatibility
     [ -n "$backuphisthost" ] && mysqldumpcommand=$mysqldumpcommand" -h $backuphisthost"
-    [[ -n "$backuphistpass" && -z "$backuphist_credentials_file" ]] && mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
+    [ -n "$backuphistpass" ] && mysqldumpcommand=$mysqldumpcommand" -p$backuphistpass"
     [ -n "$backuphistport" ] && mysqldumpcommand=$mysqldumpcommand" -P $backuphistport"
     [ -n "$backuphistsocket" ] && mysqldumpcommand=$mysqldumpcommand" -S $backuphistsocket"
     mysqldumpcommand=$mysqldumpcommand" $backuphistschema"
@@ -474,9 +451,7 @@ function preflight_check {
 # Debug variables function
 function debugme {
     log_info "defaults file: " "$defaults_file"
-    log_info "backup credentials file: " "$credentials_file"
     log_info "backuphist defaults file: " "$backuphist_defaults_file"
-    log_info "backuphist credentials file: " "$backuphist_credentials_file"
     log_info "host: " "$host"
     log_info "hostport: " "$hostport"
     log_info "backupuser: " "$backupuser"
