@@ -17,7 +17,7 @@ openfilelimit=0
 
 # To support password authentication without passing the password on the CLI, specify an extra credentials file:
 # credentials_file=/root/.my.cnf
-# When this is specified, the defaults file will be loaded as defaults-extra-file and the credentials file will be loaded as defaults file.
+# When both credentials and defaults_file are specified, the defaults file will be loaded as defaults-extra-file and the credentials file will be loaded as defaults file.
 
 # For multi-instance support, you can optionally specify a name of the instance. This name is used in the history table and in the log file name.
 # instance_name=my_33062
@@ -42,7 +42,7 @@ backuppass=testpass
 
 # To support password authentication to the backup history server without passing the password on the CLI, specify a credentials file:
 # backuphist_credentials_file=/root/my.cnf
-# When this is specified, the defaults file will be loaded as defaults-extra-file and the credentials file will be loaded as defaults file.
+# When both are specified, the defaults file will be loaded as defaults-extra-file and the credentials file will be loaded as defaults file.
 
 # MariaDB/MySQL/Percona host for backup history
 backuphisthost=localhost
