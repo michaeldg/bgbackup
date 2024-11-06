@@ -84,10 +84,19 @@ monyogport=
 fullbackday=Everyday
 
 # Differential does incremental backup based on the last full backup instead of last full or incremental
-differential=no
+differential=yes
 
-# Number of full backups to keep
-keepnum=3
+# Number of full daily backups to keep
+keepdaily=3
+
+# Number of full weekly backups to keep
+keepweekly=4
+
+# Number of full monthly backups to keep
+keepmonthyl=3
+
+# Number of full yearly backups to keep
+keepyearly=3
 
 # Number of backup table backups to keep.
 keepbkuptblnum=1
