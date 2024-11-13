@@ -390,7 +390,7 @@ function backup_cleanup {
     if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
 
         log_info "Marking expired week backups as deletable backup"
-        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET weekly=2 WHERE hostname='$mhost' weekly=1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (604800 * ($keepweekly + 1))"
+        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET weekly=2 WHERE hostname='$mhost' AND weekly=1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (604800 * ($keepweekly + 1))"
 
         log_info "Marking expired month backups as deletable backup"
         $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET monthly=2 WHERE hostname='$mhost' AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*31 * ($keepmonthly + 1))"
