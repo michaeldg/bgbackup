@@ -706,8 +706,6 @@ touch $lockfile
 
 mysqlhistcreate
 
-mysqlhistmigrate
-
 mysqltargetcreate
 
 # Check that mysql client can connect
