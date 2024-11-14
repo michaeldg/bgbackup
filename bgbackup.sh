@@ -398,61 +398,18 @@ function backup_cleanup {
         log_info "Marking expired year backups as deletable backup"
         $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET yearly=2 WHERE hostname='$mhost' AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*366 * ($keepyearly + 1))"
 
-        log_info "Checking daily backups to clean up - $keepdaily to keep."
+        log_info "Checking backups to clean up - $keepdaily to keep."
         limitoffset=$((keepdaily-1))
         delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND yearly <> 1 AND monthly <> 1 AND weekly <> 1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
         if [ "$delcount" -gt 0 ]; then
             deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND weekly <> 1 AND monthly <> 1 AND yearly <> 1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
             eval "$deletecmd" | while read -r todelete; do
-                log_info "Deleted daily full, differential or incremental backup $todelete"
+                log_info "Deleted backup $todelete"
                 rm -Rf "$todelete"
                 markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
             done
         else
-            log_info "No daily backups to delete at this time."
-        fi
-
-        log_info "Checking weekly backups to clean up - $keepweekly to keep."
-        limitoffset=$((keepweekly-1))
-        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly=0 AND monthly=0 AND weekly >=1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND yearly=0 AND monthly=0 AND weekly=1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-        if [ "$delcount" -gt 0 ]; then
-            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly=0 AND monthly=0 AND weekly=1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND weekly=1 AND monthly=0 AND yearly=0 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-            eval "$deletecmd" | while read -r todelete; do
-                log_info "Deleted weekly backup $todelete"
-                rm -Rf "$todelete"
-                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
-            done
-        else
-            log_info "No weekly backups to delete at this time."
-        fi
-
-
-        log_info "Checking monthly backups to clean up - $keepmonthly to keep."
-        limitoffset=$((keepmonthly-1))
-        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly=0 AND monthly=1 AND weekly=0 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND yearly=0 AND monthly=1 AND weekly=1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-        if [ "$delcount" -gt 0 ]; then
-            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly=0 AND monthly=1 AND weekly=0 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND weekly=0 AND monthly=1 AND yearly=0 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-            eval "$deletecmd" | while read -r todelete; do
-                log_info "Deleted monthly backup $todelete"
-                rm -Rf "$todelete"
-                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
-            done
-        else
-            log_info "No monthly backups to delete at this time."
-        fi
-
-        log_info "Checking weekly backups to clean up - $keepyearly to keep."
-        limitoffset=$((keepyearly-1))
-        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly=0 AND monthly=0 AND weekly=1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND yearly=0 AND monthly=0 AND weekly=1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-        if [ "$delcount" -gt 0 ]; then
-            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly=0 AND monthly=0 AND weekly=1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND weekly=1 AND monthly=0 AND yearly=0 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-            eval "$deletecmd" | while read -r todelete; do
-                log_info "Deleted weekly backup $todelete"
-                rm -Rf "$todelete"
-                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
-            done
-        else
-            log_info "No weekly backups to delete at this time."
+            log_info "No backups to delete at this time."
         fi
 
     else
