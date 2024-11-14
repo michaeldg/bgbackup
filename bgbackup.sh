@@ -367,7 +367,7 @@ function backup_history {
     [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE hostname='$mhost' AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND yearly=1")
 
     historyinsert=$(cat <<EOF
-INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly bulocation, logfile, status, butype, bktype, arctype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
+INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, bktype, arctype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
 VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 EOF
 )
