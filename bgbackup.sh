@@ -693,7 +693,7 @@ if [ "$check_table" -eq 0 ]; then
     create_history_table # Create history table if it doesn't exist
 fi
 
-need_migrate_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='daily'")
+need_migrate_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='weekly'")
 if [ "$need_migrate_table" -eq 0 ]; then
     migrate_history_table # Migrate history table if it is old version
 fi
