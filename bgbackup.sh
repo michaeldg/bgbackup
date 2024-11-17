@@ -123,19 +123,13 @@ function innocreate {
 	if [ ! -d "$tempfolder" ]
 	then
     		log_info "Error: $tempfolder  directory not found"
-    		log_info "The configured directory for tempfolders does not exist. Please create this first."
-    		log_status=FAILED
-    		mail_log
-    		exit 1
+    		log_error "The configured directory for tempfolders does not exist. Please create this first."
 	fi
 
 	# verify user running script has permissions needed to write to tempfolder  directory
 	if [ ! -w "$tempfolder" ]; then
     		log_info "Error: $tempfolder  directory is not writable."
-    		log_info "Verify the user running this script has write access to the configured tempfolder directory."
-    		log_status=FAILED
-    		mail_log
-    		exit 1
+    		log_error "Verify the user running this script has write access to the configured tempfolder directory."
 	fi
 
 
@@ -380,11 +374,7 @@ EOF
     if [ "$verifyinsert" -eq 1 ]; then
         log_info "Backup history database record inserted successfully."
     else
-        echo "Backup history database record NOT inserted successfully!"
-        log_info "Backup history database record NOT inserted successfully!"
-        log_status=FAILED
-        mail_log
-        exit 1
+        log_error "Backup history database record NOT inserted successfully!"
     fi
 }
 
@@ -463,11 +453,7 @@ function config_check {
         compress="no"
     fi
     if [[ "$computil" != "gzip" && "$computil" != "pigz"* ]] && [ "$bktype" = "archive" ]; then
-        verbose="yes"
-        log_info "Fatal: $computil compression method is unsupported."
-        log_status=FAILED
-        mail_log
-        exit 1
+        log_error "Fatal: $computil compression method is unsupported."
     fi
 
     if [ "$galera" = "yes" ]; then
@@ -607,19 +593,13 @@ logfile=$logpath/bgbackup_$(date +%Y-%m-%d-%T).log    # logfile
 if [ ! -d "$backupdir" ]
 then
     log_info "Error: $backupdir directory not found"
-    log_info "The configured directory for backups does not exist. Please create this first."
-    log_status=FAILED
-    mail_log
-    exit 1
+    log_error "The configured directory for backups does not exist. Please create this first."
 fi
 
 # verify user running script has permissions needed to write to backup directory
 if [ ! -w "$backupdir" ]; then
     log_info "Error: $backupdir directory is not writable."
-    log_info "Verify the user running this script has write access to the configured backup directory."
-    log_status=FAILED
-    mail_log
-    exit 1
+    log_error "Verify the user running this script has write access to the configured backup directory."
 fi
 
 
@@ -634,11 +614,7 @@ elif [ "$backuptool" == "2" ] && command -v xtrabackup >/dev/null; then
     innobackupex=$(command -v xtrabackup)  # Percona xtrabackup 8.0 phased out innobackupex command
     has_innobackupex=0
 else
-    echo "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
-    log_info "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
-    log_status=FAILED
-    mail_log
-    exit 1
+    log_error "The backuptool does not appear to be installed. Please check that a valid backuptool is chosen in bgbackup.cnf and that it's installed."
 fi
 
 # Check if old 'keepnum' variable is specified
@@ -650,10 +626,7 @@ fi
 # Check if we are not running too long (when the disk is full or locked, bgbackup can be stuck
 runtime=`/usr/bin/ps -o etimes= -p "$$"`
 if [ $runtime -gt 300 ]; then
-    log_info "The script was started more then 5 minutes ago, something is wrong."
-    log_status=FAILED
-    mail_log
-    exit 1
+    log_error "The script was started more then 5 minutes ago, something is wrong."
 fi
 
 # Check that we are not already running
@@ -664,10 +637,7 @@ lockfile=$lockfile".lock"
 
 if [ -f $lockfile ]
 then
-    log_info "Another instance of $lockfile is already running. Exiting."
-    log_status=FAILED
-    mail_log
-    exit 1
+    log_error "Another instance of $lockfile is already running. Exiting."
 fi
 trap 'rm -f $lockfile' 0
 touch $lockfile
@@ -679,24 +649,17 @@ mysqltargetcreate
 # Check that mysql client can connect
 $mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null
 if [ "$?" -eq 1 ]; then
-  log_info "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
   if [ "$debug" = yes ] ; then
     debugme
-    echo "$mysqlhistcommand"
+    log_info "$mysqlhistcommand"
   fi
-  log_status=FAILED
-  mail_log
-  exit 1
+  log_error "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
 fi
 
 # Check that the database exists before continuing further
 $mysqlhistcommand "USE $backuphistschema"
 if [ "$?" -eq 1 ]; then
-    echo "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
-    log_info "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
-    log_status=FAILED
-    mail_log
-    exit 1
+    log_error "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
 fi
 
 check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
