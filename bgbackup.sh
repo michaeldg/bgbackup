@@ -230,6 +230,22 @@ function backer_upper {
     log_info "CAUTION: ALWAYS VERIFY YOUR BACKUPS."
 }
 
+# Function to write configuration
+function backup_write_config {
+    echo "# Backup configuration - to make sure the restore uses the same tool version. Newer version might also work." > $bulocation/bgbackup.cnf
+    echo "backuptool=${backuptool}" >> $bulocation/bgbackup.cnf
+    echo "xtrabackup_version=${xtrabackup_version}" >> $bulocation/bgbackup.cnf
+    echo "server_version=${server_version}" >> $bulocation/bgbackup.cnf
+    echo "compress=${compress}" >> $bulocation/bgbackup.cnf
+    echo "encrypt=${encrypt}" >> $bulocation/bgbackup.cnf
+    echo "cryptkey=${cryptkey}" >> $bulocation/bgbackup.cnf
+    echo "galera=${galera}" >> $bulocation/bgbackup.cnf
+    echo "slave=${slave}" >> $bulocation/bgbackup.cnf
+
+    log_info "Wrote backup configuration file $bulocation/bgbackup.cnf"
+    # VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
+}
+
 # Function to prepare backup
 function backup_prepare {
     if [ "$backuptool" == "1" ] ; then
@@ -681,6 +697,8 @@ galera_check # Check if minimum nodes are available on Galera cluster
 preflight_check # Run preflight check script to stop (for example) stop backup from running on primary nodes
 
 backer_upper # Execute the backup.
+
+backup_write_config # Write configuration needed for restoring
 
 backup_cleanup # Cleanup old backups.
 
