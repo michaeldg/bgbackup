@@ -233,6 +233,7 @@ function backer_upper {
 # Function to write configuration
 function backup_write_config {
     echo "# Backup configuration - to make sure the restore uses the same tool version. Newer version might also work." > $bulocation/bgbackup.cnf
+    echo "butype=${butype}" >> $bulocation/bgbackup.cnf
     echo "backuptool=${backuptool}" >> $bulocation/bgbackup.cnf
     echo "xtrabackup_version=${xtrabackup_version}" >> $bulocation/bgbackup.cnf
     echo "server_version=${server_version}" >> $bulocation/bgbackup.cnf
@@ -420,7 +421,8 @@ function backup_cleanup {
         else
             log_info "No backups to delete at this time."
         fi
-
+    elif [ $log_status = "SUCCEEDED" ] && [ $butype != "Full" ]; then
+        log_info "Not deleting any backups as this is not a full backup run."
     else
         log_info "Backup failed. No backups deleted at this time."
     fi
