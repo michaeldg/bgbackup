@@ -48,12 +48,15 @@ function log_info() {
 }
 
 # Error function
-function  log_error() {
+function log_error() {
     if [ "$syslog" = yes ] ; then
         logger -p local0.notice -t bgrestore "$*"
     fi
     printf "%s --> %s\n" "$(date +%Y-%m-%d-%T)" "$*" >>"$logfile"
     printf "%s --> %s\n" "$(date +%Y-%m-%d-%T)" "$*" 1>&2
+    if [ "$mailon" = "failure" ] || [ "$mailon" = "all" ] ; then
+        mail_log
+    fi
     exit 1
 }
 

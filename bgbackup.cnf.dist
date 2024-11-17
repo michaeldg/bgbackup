@@ -159,6 +159,8 @@ galera_minimum_nodes=3
 # Run a preflight check script. If this script does not echo "OK" the backup process does not start.
 # Input parameter: Path to bgbackup configuration file
 preflight_script="echo 'OK' || echo"
+# If the preflight check script produces any output other then 'OK', the backup will not run.
+# If the preflight check script output does not start with 'NO_ERROR;' the backup run will have result ERROR and produce stderr output.
 
 # Include slave info?
 # WARNING: If slave info is included and nolock is enabled, bgbackup will enable safe-slave-backup. 
