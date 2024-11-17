@@ -497,7 +497,15 @@ function preflight_check {
     if [ "$preflight_return_value" != "OK" ]; then
         log_info "Preflight script did not return OK, preflight check output:"
         log_info "$preflight_return_value"
-        log_error "Not creating a backup because preflight check failed"
+        if [[ ${preflight_return_value:0:9} == "NO_ERROR;" ]]; then
+            log_info "Preflight indicated there is no error with this situation. Therefore the backup process is exiting without stderr output"
+            if [ "$debug" = yes ] ; then
+                debugme
+            fi
+            exit 0
+        else
+            log_error "Not creating a backup because preflight check failed"
+        fi
     else
         log_info "Preflight check was OK, proceeding to take backup"
     fi
