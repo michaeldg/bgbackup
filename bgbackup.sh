@@ -501,6 +501,8 @@ function config_check {
         log_error "Fatal: fullbackupday must be any of Monday Tuesday Wednesday Thursday Friday Saturday Sunday Everyday Always"
     fi
 
+}
+
 function galera_check {
     if [ "$galera" == "yes" ]; then
         num_sst_processes=`ps aux|grep wsrep_sst|grep -v grep|wc -l`
