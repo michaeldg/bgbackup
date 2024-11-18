@@ -243,6 +243,11 @@ function backup_write_config {
     echo "cryptkey=${cryptkey}" >> $conf_file_path
     echo "galera=${galera}" >> $conf_file_path
     echo "slave=${slave}" >> $conf_file_path
+    if [ "$butype" = "Differential" ]; then
+        echo "incbase=$diffbase" >> $conf_file_path
+    elif [ "$butype" == "Incremental" ]; then
+        echo "incbase=$incbase" >> $conf_file_path
+    fi
 
     log_info "Wrote backup configuration file $conf_file_path"
     # VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
