@@ -234,19 +234,19 @@ function backer_upper {
 function backup_write_config {
     conf_file_path="${bulocation}/bgbackup.cnf"
     echo "# Backup configuration - to make sure the restore uses the same tool version. Newer version might also work." > $conf_file_path
-    echo "butype=${butype}" >> $conf_file_path
-    echo "backuptool=${backuptool}" >> $conf_file_path
-    echo "xtrabackup_version=${xtrabackup_version}" >> $conf_file_path
-    echo "server_version=${server_version}" >> $conf_file_path
-    echo "compress=${compress}" >> $conf_file_path
-    echo "encrypt=${encrypt}" >> $conf_file_path
-    echo "cryptkey=${cryptkey}" >> $conf_file_path
-    echo "galera=${galera}" >> $conf_file_path
-    echo "slave=${slave}" >> $conf_file_path
+    echo "butype=${butype@Q}" >> $conf_file_path
+    echo "backuptool=${backuptool@Q}" >> $conf_file_path
+    echo "xtrabackup_version=${xtrabackup_version@Q}" >> $conf_file_path
+    echo "server_version=${server_version@Q}" >> $conf_file_path
+    echo "compress=${compress@Q}" >> $conf_file_path
+    echo "encrypt=${encrypt@Q}" >> $conf_file_path
+    echo "cryptkey=${cryptkey@Q}" >> $conf_file_path
+    echo "galera=${galera@Q}" >> $conf_file_path
+    echo "slave=${slave@Q}" >> $conf_file_path
     if [ "$butype" = "Differential" ]; then
-        echo "incbase=$diffbase" >> $conf_file_path
+        echo "incbase=${diffbase@Q}" >> $conf_file_path
     elif [ "$butype" == "Incremental" ]; then
-        echo "incbase=$incbase" >> $conf_file_path
+        echo "incbase=${incbase@Q}" >> $conf_file_path
     fi
 
     log_info "Wrote backup configuration file $conf_file_path"
