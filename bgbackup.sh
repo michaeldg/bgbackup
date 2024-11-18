@@ -486,7 +486,20 @@ function config_check {
             galera="error"
         fi
     fi
-}
+
+
+    # Verify if fullbackupday is set correctly
+    found_fullbackup_timing=false
+    fullbackup_options=("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Everyday", "Always")
+    for day in "${fullbackup_options[@]}"; do
+        if [[ "$day" == "$fullbackday" ]]; then
+            found_fullbackup_timing=true
+        fi
+    done
+
+    if [[ "$found_fullbackup_timing" == false ]]; then
+        log_error "Fatal: fullbackupday must be any of Monday Tuesday Wednesday Thursday Friday Saturday Sunday Everyday Always"
+    fi
 
 function galera_check {
     if [ "$galera" == "yes" ]; then
