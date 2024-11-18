@@ -232,18 +232,19 @@ function backer_upper {
 
 # Function to write configuration
 function backup_write_config {
-    echo "# Backup configuration - to make sure the restore uses the same tool version. Newer version might also work." > $bulocation/bgbackup.cnf
-    echo "butype=${butype}" >> $bulocation/bgbackup.cnf
-    echo "backuptool=${backuptool}" >> $bulocation/bgbackup.cnf
-    echo "xtrabackup_version=${xtrabackup_version}" >> $bulocation/bgbackup.cnf
-    echo "server_version=${server_version}" >> $bulocation/bgbackup.cnf
-    echo "compress=${compress}" >> $bulocation/bgbackup.cnf
-    echo "encrypt=${encrypt}" >> $bulocation/bgbackup.cnf
-    echo "cryptkey=${cryptkey}" >> $bulocation/bgbackup.cnf
-    echo "galera=${galera}" >> $bulocation/bgbackup.cnf
-    echo "slave=${slave}" >> $bulocation/bgbackup.cnf
+    conf_file_path="${bulocation}/bgbackup.cnf"
+    echo "# Backup configuration - to make sure the restore uses the same tool version. Newer version might also work." > $conf_file_path
+    echo "butype=${butype}" >> $conf_file_path
+    echo "backuptool=${backuptool}" >> $conf_file_path
+    echo "xtrabackup_version=${xtrabackup_version}" >> $conf_file_path
+    echo "server_version=${server_version}" >> $conf_file_path
+    echo "compress=${compress}" >> $conf_file_path
+    echo "encrypt=${encrypt}" >> $conf_file_path
+    echo "cryptkey=${cryptkey}" >> $conf_file_path
+    echo "galera=${galera}" >> $conf_file_path
+    echo "slave=${slave}" >> $conf_file_path
 
-    log_info "Wrote backup configuration file $bulocation/bgbackup.cnf"
+    log_info "Wrote backup configuration file $conf_file_path"
     # VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 }
 
