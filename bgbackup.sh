@@ -363,8 +363,7 @@ EOF
 # Function to write backup history to database
 function backup_history {
     server_version=$($mysqlhistcommand "SELECT @@version")
-    xtrabackup_version=$($innobackupex -version 2>&1)
-    if [ "$backuptool" == "2" ] ; then xtrabackup_version=$(cat "$logfile" | grep "/bin/innobackupex version") ; fi
+    xtrabackup_version=$(xtrabackup --version 2>&1|grep 'based')
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
         bulocation="$dirname"
@@ -701,13 +700,13 @@ preflight_check # Run preflight check script to stop (for example) stop backup f
 
 backer_upper # Execute the backup.
 
-backup_write_config # Write configuration needed for restoring
-
 backup_cleanup # Cleanup old backups.
 
 endtime=$(date +"%Y-%m-%d %H:%M:%S")
 
 backup_history
+
+backup_write_config # Write configuration needed for restoring
 
 mdbutil_backup
 
