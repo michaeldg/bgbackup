@@ -337,7 +337,7 @@ galera varchar(5) DEFAULT NULL,
 slave varchar(5) DEFAULT NULL,
 threads tinyint(2) DEFAULT NULL,
 xtrabackup_version varchar(120) DEFAULT NULL,
-server_version varchar(50) DEFAULT NULL,
+server_version varchar(120) DEFAULT NULL,
 backup_size varchar(20) DEFAULT NULL,
 deleted_at timestamp NULL DEFAULT NULL,
 PRIMARY KEY (uuid),
@@ -356,6 +356,7 @@ ALTER TABLE $backuphistschema.backup_history
 ADD COLUMN weekly tinyint UNSIGNED NOT NULL DEFAULT 0,
 ADD COLUMN monthly tinyint UNSIGNED NOT NULL DEFAULT 0,
 ADD COLUMN yearly tinyint UNSIGNED NOT NULL DEFAULT 0,
+MODIFY COLUMN server_version VARCHAR(120) NULL DEFAULT NULL,
 ADD INDEX hostname_endtime (hostname, end_time),
 ADD INDEX hostname_status_deleted (hostname, status, deleted_at)
 EOF
@@ -367,7 +368,7 @@ EOF
 
 # Function to write backup history to database
 function backup_history {
-    server_version=$($mysqlhistcommand "SELECT @@version")
+    server_version=$(mysqld -V)
     xtrabackup_version=$(xtrabackup --version 2>&1|grep 'based')
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
