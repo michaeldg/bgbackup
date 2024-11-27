@@ -419,11 +419,11 @@ function backup_cleanup {
         delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND yearly <> 1 AND monthly <> 1 AND weekly <> 1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
         if [ "$delcount" -gt 0 ]; then
             deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND weekly <> 1 AND monthly <> 1 AND yearly <> 1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-            eval "$deletecmd" | while read -r todelete; do
+            while read -r todelete; do
                 log_info "Deleted backup $todelete"
                 rm -Rf "$todelete"
                 markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
-            done
+            done <<< "$deletecmd"
         else
             log_info "No backups to delete at this time."
         fi
