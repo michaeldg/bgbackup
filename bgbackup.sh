@@ -454,11 +454,11 @@ function backup_cleanup {
 function backup_failed_cleanup {
 
     if [ $butype = "Full" ]; then
-        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -ctime +${keepfaileddays}|grep 'FAILED_')
+        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -ctime +${keepfaileddays:-365}|grep 'FAILED_' 2>/dev/null)
         while read -r todelete; do
-            log_info "Deleted failed backup $todelete"
             rm -Rf "$backupdir/$todelete"
             markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND hostname = '$mhost'")
+            log_info "Deleted failed backup $todelete"
         done <<< "$findfailedcmd"
     fi
 
