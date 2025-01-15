@@ -453,17 +453,15 @@ function backup_cleanup {
 # Function to cleanup failed backups
 function backup_failed_cleanup {
 
-    if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
+    if [ $butype = "Full" ]; then
         findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -ctime +${keepfaileddays}|grep 'FAILED_')
         while read -r todelete; do
             log_info "Deleted failed backup $todelete"
             rm -Rf "$backupdir/$todelete"
             markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND hostname = '$mhost'")
         done <<< "$findfailedcmd"
-
-    else
-        log_info "Backup failed or not a full backup. No failed backups deleted at this time."
     fi
+
 }
 
 # Function to dump $backuphistschema schema
@@ -754,6 +752,8 @@ preflight_check # Run preflight check script to stop (for example) stop backup f
 backer_upper # Execute the backup.
 
 backup_cleanup # Cleanup old backups.
+
+backup_failed_cleanup  # Cleanup old failed backups
 
 endtime=$(date +"%Y-%m-%d %H:%M:%S")
 
