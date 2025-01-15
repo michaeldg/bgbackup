@@ -247,7 +247,7 @@ function backup_write_config {
     echo "xtrabackup_version=${xtrabackup_version@Q}" >> $conf_file_path
     echo "server_version=${server_version@Q}" >> $conf_file_path
     echo "compress=${compress@Q}" >> $conf_file_path
-    echo "encrypt=${encrypt@Q}" >> $conf_file_pathi
+    echo "encrypt=${encrypt@Q}" >> $conf_file_path
     echo "# if encryption is enabled, the following variable must be filled for fgrestore to work:" >> $conf_file_path
     echo "#cryptkey=your_crypt_key" >> $conf_file_path
     echo "galera=${galera@Q}" >> $conf_file_path
