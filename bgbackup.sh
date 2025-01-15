@@ -223,6 +223,14 @@ function backer_upper {
         monyog enable
         sleep 30
     fi
+    if [ "$log_status" != "SUCCEEDED" ]; then
+        echo "Renaming failed backup..."
+        backup_to_rename=$(basename $bulocation)
+        mv "$backupdir/$backup_to_rename" "$backupdir/FAILED_$backup_to_rename"
+        bulocation="$backupdir/FAILED_$backup_to_rename"
+
+        echo "Backup renamed, new backup location is $bulocation"
+    fi
     if [ "$log_status" = "SUCCEEDED" ] && [ "$bktype" == "prepared-archive" ] ; then
         backup_prepare
     fi
@@ -239,8 +247,9 @@ function backup_write_config {
     echo "xtrabackup_version=${xtrabackup_version@Q}" >> $conf_file_path
     echo "server_version=${server_version@Q}" >> $conf_file_path
     echo "compress=${compress@Q}" >> $conf_file_path
-    echo "encrypt=${encrypt@Q}" >> $conf_file_path
-    echo "cryptkey=${cryptkey@Q}" >> $conf_file_path
+    echo "encrypt=${encrypt@Q}" >> $conf_file_pathi
+    echo "# if encryption is enabled, the following variable must be filled for fgrestore to work:" >> $conf_file_path
+    echo "#cryptkey=your_crypt_key" >> $conf_file_path
     echo "galera=${galera@Q}" >> $conf_file_path
     echo "slave=${slave@Q}" >> $conf_file_path
     if [ "$butype" = "Differential" ]; then
@@ -398,6 +407,13 @@ EOF
         log_info "Backup history database record inserted successfully."
     else
         log_error "Backup history database record NOT inserted successfully!"
+
+        echo "Renaming history failed backup..."
+        backup_to_rename=$(basename $bulocation)
+        mv "$backupdir/$backup_to_rename" "$backupdir/HISTFAILED_$backup_to_rename"
+        bulocation="$backupdir/HISTFAILED_$backup_to_rename"
+
+        echo "Backup renamed, new backup location is $bulocation"
     fi
 }
 
@@ -431,6 +447,22 @@ function backup_cleanup {
         log_info "Not deleting any backups as this is not a full backup run."
     else
         log_info "Backup failed. No backups deleted at this time."
+    fi
+}
+
+# Function to cleanup failed backups
+function backup_failed_cleanup {
+
+    if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
+        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -ctime +${keepfaileddays}|grep 'FAILED_')
+        while read -r todelete; do
+            log_info "Deleted failed backup $todelete"
+            rm -Rf "$backupdir/$todelete"
+            markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND hostname = '$mhost'")
+        done <<< "$findfailedcmd"
+
+    else
+        log_info "Backup failed or not a full backup. No failed backups deleted at this time."
     fi
 }
 
