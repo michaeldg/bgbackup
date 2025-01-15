@@ -226,8 +226,8 @@ function backer_upper {
     if [ "$log_status" != "SUCCEEDED" ]; then
         echo "Renaming failed backup..."
         backup_to_rename=$(basename $bulocation)
-        mv "$backupdir/$backup_to_rename" "$backupdir/FAILED_$backup_to_rename"
-        bulocation="$backupdir/FAILED_$backup_to_rename"
+        mv "${backupdir}/${backup_to_rename}" "${backupdir}/FAILED_${backup_to_rename}"
+        bulocation="${backupdir}/FAILED_${backup_to_rename}"
 
         echo "Backup renamed, new backup location is $bulocation"
     fi
@@ -410,8 +410,8 @@ EOF
 
         echo "Renaming history failed backup..."
         backup_to_rename=$(basename $bulocation)
-        mv "$backupdir/$backup_to_rename" "$backupdir/HISTFAILED_$backup_to_rename"
-        bulocation="$backupdir/HISTFAILED_$backup_to_rename"
+        mv "${backupdir}/${backup_to_rename}" "${backupdir}/HISTFAILED_${backup_to_rename}"
+        bulocation="${backupdir}/HISTFAILED_${backup_to_rename}"
 
         echo "Backup renamed, new backup location is $bulocation"
     fi
