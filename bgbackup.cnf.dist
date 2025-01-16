@@ -22,6 +22,26 @@ openfilelimit=0
 # For multi-instance support, you can optionally specify a name of the instance. This name is used in the history table and in the log file name.
 # instance_name=my_33062
 
+# When possibly creating backups from multiple instances (for example an
+# asynchronous replication pair, where some times backups are created on the
+# other host) the backups on sibling hosts may need to be removed as well as
+# the backups from this host.
+# 
+# Specify a comma separated list fo siblings. Don't forget the instance_name if added with a -.
+# The host name taken is the exact output of `hostname`.
+# siblings=secondary.myorg.local,primary.myorg.local,tertiary.myorg.local
+# 
+# When siblings are specified, backups of the siblings are rotated as well, and
+# considered it's own backups. Incrementals/differentials can only be created
+# from this node's backups.
+#
+# WARNING! The backups of all the siblings MUST reside on the exact same
+# storage as the backup of this host. Otherwise, deleting of sibling's backups
+# will stop the sibling from deleting the backups.
+#
+# If you want to always create backups on all siblings, do not use this
+# feature. The backups will be rotated in each node's own backup process.
+
 # MariaDB/MySQL/Percona host (optional)
 #host=127.0.0.1
 

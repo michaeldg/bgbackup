@@ -60,17 +60,27 @@ function log_error() {
     exit 1
 }
 
-# Function to create innobackupex/mariabackup command
+# Function to get WHERE clause for hostname (in case siblings are specified)
+function generate_hostname_where {
+    insert_host=$(hostname)
+    [ -n "$instance_name" ] && insert_host="${insert_host}-$instance_name"
+
+    this_hostname_where="hostname='$insert_host'"
+
+    siblings_hostname_where="hostname IN ('$insert_host"
+    [ -n "$instance_name" ] && siblings_hostname_where="${siblings_hostname_where}-$instance_name"
+    siblings_hostname_where="${siblings_hostname_where}'"
+    [ -n "$siblings" ] && siblings_quoted=$(echo "$siblings" | sed "s/,/'/',/g; s/^/'/; s/$/'/") && siblings_hostname_where="${siblings_hostname_where},${siblings_quoted}"
+}
+
 function innocreate {
-    mhost=$(hostname)
-    [ -n "$instance_name" ] && mhost=$mhost"-$instance_name"
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
     [ -n "$defaults_extra_file" ] && innocommand=$innocommand" --defaults-extra-file=$defaults_extra_file"
     if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
-    alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
-    anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL")
+    alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
+    anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ]; then
             butype=Full
@@ -79,7 +89,7 @@ function innocreate {
         else
             if [ "$differential" = yes ] ; then
                 butype=Differential
-                diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+                diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 dirname="$backupdir/diff-$dirdate"
 
                 if [ -d "$diffbase" ]; then
@@ -94,7 +104,7 @@ function innocreate {
                 fi
             else
                 butype=Incremental
-                incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND hostname = '$mhost' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+                incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
                 if [ -d "$incbase" ]; then
                     dirname="$backupdir/incr-$dirdate"
                     innocommand="$innocommand $dirname"
@@ -259,7 +269,7 @@ function backup_write_config {
     fi
 
     log_info "Wrote backup configuration file $conf_file_path"
-    # VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
+    # VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 }
 
 # Function to prepare backup
@@ -391,18 +401,18 @@ function backup_history {
     monthly=0
     yearly=0
 
-    [ "${keepweekly:-0}" -gt "0" ] && weekly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS weekly FROM $backuphistschema.backup_history WHERE hostname='$mhost' AND YEAR(end_time) = YEAR('$endtime') AND WEEK(end_time) = WEEK('$endtime') AND status='SUCCEEDED' AND weekly=1")
-    [ "${keepmonthly:-0}" -gt "0" ] && monthly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS monthly FROM $backuphistschema.backup_history WHERE hostname='$mhost' AND YEAR(end_time) = YEAR('$endtime') AND MONTH(end_time) = MONTH('$endtime') AND status='SUCCEEDED' AND monthly=1")
-    [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE hostname='$mhost' AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND yearly=1")
+    [ "${keepweekly:-0}" -gt "0" ] && weekly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS weekly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND WEEK(end_time) = WEEK('$endtime') AND status='SUCCEEDED' AND weekly=1")
+    [ "${keepmonthly:-0}" -gt "0" ] && monthly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS monthly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND MONTH(end_time) = MONTH('$endtime') AND status='SUCCEEDED' AND monthly=1")
+    [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND yearly=1")
 
     historyinsert=$(cat <<EOF
 INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, bktype, arctype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
-VALUES (UUID(), "$mhost", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
+VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 EOF
 )
     $mysqlhistcommand "$historyinsert"
     #verify insert
-    verifyinsert=$($mysqlhistcommand "select count(*) from $backuphistschema.backup_history where hostname='$mhost' and end_time='$endtime'")
+    verifyinsert=$($mysqlhistcommand "select count(*) from $backuphistschema.backup_history where ${this_hostname_where} and end_time='$endtime'")
     if [ "$verifyinsert" -eq 1 ]; then
         log_info "Backup history database record inserted successfully."
     else
@@ -422,23 +432,22 @@ function backup_cleanup {
     if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
 
         log_info "Marking expired week backups as deletable backup"
-        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET weekly=2 WHERE hostname='$mhost' AND weekly=1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (604800 * ($keepweekly + 1))"
+        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET weekly=2 WHERE ${siblings_hostname_where} AND weekly=1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (604800 * ($keepweekly + 1))"
 
         log_info "Marking expired month backups as deletable backup"
-        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET monthly=2 WHERE hostname='$mhost' AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*31 * ($keepmonthly + 1))"
+        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET monthly=2 WHERE ${siblings_hostname_where} AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*31 * ($keepmonthly + 1))"
 
         log_info "Marking expired year backups as deletable backup"
-        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET yearly=2 WHERE hostname='$mhost' AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*366 * ($keepyearly + 1))"
+        $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET yearly=2 WHERE ${siblings_hostname_where} AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*366 * ($keepyearly + 1))"
 
-        log_info "Checking backups to clean up - $keepdaily to keep."
-        limitoffset=$((keepdaily-1))
-        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND yearly <> 1 AND monthly <> 1 AND weekly <> 1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
+        log_info "Checking backups to clean up - $keepdaily days to keep."
+        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND ${siblings_hostname_where} and UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND status = 'SUCCEEDED' AND deleted_at IS NULL")
         if [ "$delcount" -gt 0 ]; then
-            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < (SELECT end_time FROM $backuphistschema.backup_history WHERE butype = 'Full' AND hostname = '$mhost' AND weekly <> 1 AND monthly <> 1 AND yearly <> 1 ORDER BY end_time DESC LIMIT $limitoffset,1) AND hostname = '$mhost' AND status = 'SUCCEEDED' AND deleted_at IS NULL")
+            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL")
             while read -r todelete; do
                 log_info "Deleted backup $todelete"
                 rm -Rf "$todelete"
-                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND hostname = '$mhost' AND status = 'SUCCEEDED'")
+                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND ${siblings_hostname_where} AND status = 'SUCCEEDED'")
             done <<< "$deletecmd"
         else
             log_info "No backups to delete at this time."
@@ -458,7 +467,7 @@ function backup_failed_cleanup {
         if [ "$findfailedcmd" != "" ]; then
             while read -r todelete; do
                 rm -Rf "$backupdir/$todelete"
-                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND hostname = '$mhost'")
+                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND ${siblings_hostname_where}")
                 log_info "Deleted failed backup $todelete"
             done <<< "$findfailedcmd"
         fi
@@ -616,7 +625,7 @@ function debugme {
     log_info "innocommand: " "$innocommand"
     log_info "prepcommand: " "$prepcommand"
     log_info "dirname: " "$dirname"
-    log_info "mhost: " "$mhost"
+    log_info "siblings_hostname_where: " "$siblings_hostname_where"
     log_info "budir: " "$budir"
     log_info "run_after_success: " "$run_after_success"
     log_info "run_after_fail: " "$run_after_fail"
@@ -712,6 +721,8 @@ then
 fi
 trap 'rm -f $lockfile' 0
 touch $lockfile
+
+generate_siblings_hostname_where
 
 mysqlhistcreate
 
