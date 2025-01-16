@@ -722,7 +722,7 @@ fi
 trap 'rm -f $lockfile' 0
 touch $lockfile
 
-generate_siblings_hostname_where
+generate_hostname_where
 
 mysqlhistcreate
 
