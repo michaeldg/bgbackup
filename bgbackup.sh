@@ -422,12 +422,12 @@ EOF
     else
         log_error "Backup history database record NOT inserted successfully!"
 
-        echo "Renaming history failed backup..."
+        log_error "Renaming history failed backup..."
         backup_to_rename=$(basename $bulocation)
         mv "${backupdir}/${backup_to_rename}" "${backupdir}/HISTFAILED_${backup_to_rename}"
         bulocation="${backupdir}/HISTFAILED_${backup_to_rename}"
 
-        echo "Backup renamed, new backup location is $bulocation"
+        log_error "Backup renamed, new backup location is $bulocation"
     fi
 }
 
