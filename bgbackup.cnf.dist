@@ -82,6 +82,10 @@ backuphistpass=testpass
 # MariaDB/MySQL/Percona schema for backup history
 backuphistschema=mdbutil
 
+# Whether or not to verify backup history is working correctly
+backuphist_verify=1
+# Bgbackup will not run if backup history host is unreachable, or if the backup history schema does not exist.
+
 # If server is monitored by MONyog, should we disable alerts?
 monyog=no
 

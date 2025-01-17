@@ -732,6 +732,10 @@ mysqlhistcreate
 
 mysqltargetcreate
 
+if [ -z "$backuphist_verify" ] || [ "$backuphist_verify" = true ] || [ "$backuphist_verify" = 1 ] && backuphist_verify=1
+[ "$backuphist_verify" != 1 ] && backuphist_verify=0
+
+    
 # Check that mysql client can connect
 $mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null
 if [ "$?" -eq 1 ]; then
@@ -739,13 +743,15 @@ if [ "$?" -eq 1 ]; then
     debugme
     log_info "$mysqlhistcommand"
   fi
-  log_error "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
+  [ "$backuphist_verify" = 1 ] && log_error "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
+  [ "$backuphist_verify" = 0 ] && log_info "Warning: mysql client is unable to connect with the information you have provided. We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
 fi
 
 # Check that the database exists before continuing further
 $mysqlhistcommand "USE $backuphistschema"
 if [ "$?" -eq 1 ]; then
-    log_error "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
+  [ "$backuphist_verify" = 1 ] && log_error "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
+  [ "$backuphist_verify" = 0 ] && log_info "Warning: The database '$backuphistschema' containing the history does not exist.  We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
 fi
 
 check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
