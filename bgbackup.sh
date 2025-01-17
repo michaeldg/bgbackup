@@ -70,7 +70,11 @@ function generate_hostname_where {
     siblings_hostname_where="hostname IN ('$insert_host"
     [ -n "$instance_name" ] && siblings_hostname_where="${siblings_hostname_where}-$instance_name"
     siblings_hostname_where="${siblings_hostname_where}'"
-    [ -n "$siblings" ] && siblings_quoted=$(echo "$siblings" | sed "s/,/'/',/g; s/^/'/; s/$/'/") && siblings_hostname_where="${siblings_hostname_where},${siblings_quoted}"
+    if [ -n "$siblings" ]; then
+       siblings_quoted=$(printf "'%s'" $(echo "$siblings" | tr ',' "' '"))
+       siblings_hostname_where="${siblings_hostname_where},${siblings_quoted}"
+     fi
+     siblings_hostname_where="${siblings_hostname_where})"
 }
 
 function innocreate {
