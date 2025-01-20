@@ -431,14 +431,16 @@ EOF
     if [ "$verifyinsert" -eq 1 ]; then
         log_info "Backup history database record inserted successfully."
     else
-        log_error "Backup history database record NOT inserted successfully!"
+        log_info "Backup history database record NOT inserted successfully!"
 
-        log_error "Renaming history failed backup..."
+        log_info "Renaming history failed backupi so that it gets deleted eventually..."
         backup_to_rename=$(basename $bulocation)
         mv "${backupdir}/${backup_to_rename}" "${backupdir}/HISTFAILED_${backup_to_rename}"
         bulocation="${backupdir}/HISTFAILED_${backup_to_rename}"
 
-        log_error "Backup renamed, new backup location is $bulocation"
+        log_info "Backup renamed, new backup location is $bulocation"
+
+        log_error "ERROR! Unabled to save backup history, this means incrementals and differentials cannot be crreated."
     fi
 }
 
