@@ -248,14 +248,6 @@ function backer_upper {
         monyog enable
         sleep 30
     fi
-    if [ "$log_status" != "SUCCEEDED" ]; then
-        echo "Renaming failed backup..."
-        backup_to_rename=$(basename $bulocation)
-        mv "${backupdir}/${backup_to_rename}" "${backupdir}/FAILED_${backup_to_rename}"
-        bulocation="${backupdir}/FAILED_${backup_to_rename}"
-
-        echo "Backup renamed, new backup location is $bulocation"
-    fi
     if [ "$log_status" = "SUCCEEDED" ] && [ "$bktype" == "prepared-archive" ] ; then
         backup_prepare
     fi
@@ -401,7 +393,7 @@ EOF
 
 
 # Function to write backup history to database
-function backup_history {
+function backup_history_and_mark_failed {
     server_version=$(mysqld -V)
     xtrabackup_version=$(xtrabackup --version 2>&1|grep 'based')
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
@@ -410,6 +402,15 @@ function backup_history {
     elif [ "$bktype" = "archive" ] ; then
         backup_size=$(du -sm "$arcname" | awk '{ print $1 }')"M"
         bulocation="$arcname"
+    fi
+
+    if [ "$log_status" != "SUCCEEDED" ]; then
+        log_info "Renaming failed backup from $bulocation..."
+        backup_to_rename=$(basename $bulocation)
+        mv "${backupdir}/${backup_to_rename}" "${backupdir}/FAILED_${backup_to_rename}"
+        bulocation="${backupdir}/FAILED_${backup_to_rename}"
+
+        log_info "Backup renamed, new backup location is $bulocation"
     fi
 
     weekly=0
@@ -750,7 +751,7 @@ mysqltargetcreate
 
     
 # Check that mysql client can connect
-$mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null
+$mysqlhistcommand "SELECT 1 FROM DUAL" 1>/dev/null 2>/dev/null
 if [ "$?" -eq 1 ]; then
   if [ "$debug" = yes ] ; then
     debugme
@@ -758,6 +759,10 @@ if [ "$?" -eq 1 ]; then
   fi
   [ "$backuphist_verify" = 1 ] && log_error "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
   [ "$backuphist_verify" = 0 ] && log_info "Warning: mysql client is unable to connect with the information you have provided. We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
+
+    mysqlhistcommand="log_info "
+
+    echo $mysqlhistcommand
 fi
 
 # Check that the database exists before continuing further
@@ -793,7 +798,7 @@ backup_failed_cleanup  # Cleanup old failed backups
 
 endtime=$(date +"%Y-%m-%d %H:%M:%S")
 
-backup_history
+backup_history_and_mark_failed
 
 backup_write_config # Write configuration needed for restoring
 
