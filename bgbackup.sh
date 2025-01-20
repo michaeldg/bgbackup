@@ -100,8 +100,13 @@ function innocreate {
     [ -n "$defaults_extra_file" ] && innocommand=$innocommand" --defaults-extra-file=$defaults_extra_file"
     if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
-    alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
-    anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
+    if [[ "$mysqlhist_is_down:-0" == "0" ]]; then
+        alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
+        anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
+    else
+        alreadyfull=0
+        anyfull=0
+    fi
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
         if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ]; then
             butype=Full
@@ -403,8 +408,18 @@ function backup_history_and_mark_failed {
     server_version=$(mysqld -V)
     xtrabackup_version=$(xtrabackup --version 2>&1|grep 'based')
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
-        backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
         bulocation="$dirname"
+        if [ ! -d "$bulocation" ]; then
+          # Directory does not exist, create it
+          mkdir -p "$bulocation"
+          log_info "Backup did not produce any files, directory '$bulocation' now created."
+
+          # Create a warning file inside the new directory
+          warning_file="$bulocation/warning.txt"
+          echo "Warning: This directory was created because it did not exist." > "$warning_file"
+          log_info "Warning file created at '$warning_file'."
+        fi
+        backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
     elif [ "$bktype" = "archive" ] ; then
         backup_size=$(du -sm "$arcname" | awk '{ print $1 }')"M"
         bulocation="$arcname"
@@ -435,7 +450,7 @@ EOF
     $mysqlhistcommand "$historyinsert"
     #verify insert
     verifyinsert=$($mysqlhistcommand "select count(*) from $backuphistschema.backup_history where ${this_hostname_where} and end_time='$endtime'")
-    if [ "$verifyinsert" -eq 1 ]; then
+    if [[ "$mysqlhist_is_down:-0" == "0" &&  "$verifyinsert" -eq 1 ]]; then
         log_info "Backup history database record inserted successfully."
     else
         log_info "Backup history database record NOT inserted successfully!"
@@ -774,21 +789,23 @@ if [ "$?" -eq 1 ]; then
     echo $mysqlhistcommand
 fi
 
-# Check that the database exists before continuing further
-$mysqlhistcommand "USE $backuphistschema"
-if [ "$?" -eq 1 ]; then
-  [ "$backuphist_verify" = 1 ] && log_error "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
-  [ "$backuphist_verify" = 0 ] && log_info "Warning: The database '$backuphistschema' containing the history does not exist.  We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
-fi
+if [[ "$mysqlhist_is_down:-0" == "0" ]]; then
+    # Check that the database exists before continuing further
+    $mysqlhistcommand "USE $backuphistschema"
+    if [ "$?" -eq 1 ]; then
+      [ "$backuphist_verify" = 1 ] && log_error "Error: The database '$backuphistschema' containing the history does not exist. Please check your configuration and try again."
+      [ "$backuphist_verify" = 0 ] && log_info "Warning: The database '$backuphistschema' containing the history does not exist.  We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
+    fi
 
-check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
-if [ "$myusqlhist_is_down:-0" == 0 && "$check_table" -eq 0 ]; then
-    create_history_table # Create history table if it doesn't exist
-fi
+    check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
+    if [ "$check_table" -eq 0 ]; then
+        create_history_table # Create history table if it doesn't exist
+    fi
 
-need_migrate_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='weekly'")
-if [ "$myusqlhist_is_down:-0" == 0 && "$need_migrate_table" -eq 0 ]; then
-    migrate_history_table # Migrate history table if it is old version
+    need_migrate_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='weekly'")
+    if [ "$need_migrate_table" -eq 0 ]; then
+        migrate_history_table # Migrate history table if it is old version
+    fi
 fi
 
 mysqltargetcreate
