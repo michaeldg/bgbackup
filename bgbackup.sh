@@ -50,7 +50,6 @@ function log_info() {
 # Function in case history system is down
 function sql_history_down() {
         log_info "HISTORY QUERY WOULD FAIL: $*"
-        echo 0
 }
 
 # Error function
