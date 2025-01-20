@@ -47,6 +47,12 @@ function log_info() {
     fi
 }
 
+# Function in case history system is down
+function sql_history_down() {
+        log_info "HISTORY QUERY WOULD FAIL: $*"
+        echo 0
+}
+
 # Error function
 function log_error() {
     if [ "$syslog" = yes ] ; then
@@ -760,7 +766,10 @@ if [ "$?" -eq 1 ]; then
   [ "$backuphist_verify" = 1 ] && log_error "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
   [ "$backuphist_verify" = 0 ] && log_info "Warning: mysql client is unable to connect with the information you have provided. We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
 
-    mysqlhistcommand="echo 0 && log_info "
+    mysqlhistcommand="sql_history_down "
+
+    mysqlhist_is_down=1
+
 
     echo $mysqlhistcommand
 fi
@@ -773,12 +782,12 @@ if [ "$?" -eq 1 ]; then
 fi
 
 check_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$backuphistschema' AND table_name='backup_history' ")
-if [ "$check_table" -eq 0 ]; then
+if [ "$myusqlhist_is_down:-0" == 0 && "$check_table" -eq 0 ]; then
     create_history_table # Create history table if it doesn't exist
 fi
 
 need_migrate_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='weekly'")
-if [ "$need_migrate_table" -eq 0 ]; then
+if [ "$myusqlhist_is_down:-0" == 0 && "$need_migrate_table" -eq 0 ]; then
     migrate_history_table # Migrate history table if it is old version
 fi
 
