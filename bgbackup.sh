@@ -760,7 +760,7 @@ if [ "$?" -eq 1 ]; then
   [ "$backuphist_verify" = 1 ] && log_error "Error: mysql client is unable to connect with the information you have provided. Please check your configuration and try again."
   [ "$backuphist_verify" = 0 ] && log_info "Warning: mysql client is unable to connect with the information you have provided. We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
 
-    mysqlhistcommand="log_info "
+    mysqlhistcommand="echo 0 && log_info "
 
     echo $mysqlhistcommand
 fi
