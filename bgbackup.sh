@@ -462,7 +462,7 @@ EOF
 
         log_info "Backup renamed, new backup location is $bulocation"
 
-        log_error "ERROR! Unabled to save backup history, this means incrementals and differentials cannot be crreated."
+        log_error "ERROR! Unabled to save backup history, this means incrementals and differentials cannot be created."
     fi
 }
 
