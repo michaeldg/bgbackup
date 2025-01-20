@@ -782,11 +782,8 @@ if [ "$?" -eq 1 ]; then
   [ "$backuphist_verify" = 0 ] && log_info "Warning: mysql client is unable to connect with the information you have provided. We recommend to have working backup history for monitoring and support of differentials. Without, all created backups will be full backups."
 
     mysqlhistcommand="sql_history_down "
-
+    mysqldumpcommand="sql_history_down "
     mysqlhist_is_down=1
-
-
-    echo $mysqlhistcommand
 fi
 
 if [[ "$mysqlhist_is_down:-0" == "0" ]]; then
