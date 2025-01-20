@@ -70,12 +70,23 @@ function generate_hostname_where {
     siblings_hostname_where="hostname IN ('$insert_host"
     [ -n "$instance_name" ] && siblings_hostname_where="${siblings_hostname_where}-$instance_name"
     siblings_hostname_where="${siblings_hostname_where}'"
+    
     if [ -n "$siblings" ]; then
-       siblings_quoted=$(printf "'%s'" $(echo "$siblings" | tr ',' "' '"))
-       siblings_hostname_where="${siblings_hostname_where},${siblings_quoted}"
-     fi
-     siblings_hostname_where="${siblings_hostname_where})"
+        # Use a loop to properly quote each sibling
+        siblings_quoted=""
+        IFS=',' read -ra siblings_array <<< "$siblings"
+        for sibling in "${siblings_array[@]}"; do
+            siblings_quoted+="'$sibling',"
+        done
+        # Remove the trailing comma if siblings_quoted is not empty
+        if [ -n "$siblings_quoted" ]; then
+            siblings_quoted=${siblings_quoted%,}  # Remove the trailing comma
+            siblings_hostname_where="${siblings_hostname_where},${siblings_quoted}"
+        fi
+    fi
+    siblings_hostname_where="${siblings_hostname_where})"
 }
+
 
 function innocreate {
     innocommand="$innobackupex"
@@ -732,7 +743,7 @@ mysqlhistcreate
 
 mysqltargetcreate
 
-if [ -z "$backuphist_verify" ] || [ "$backuphist_verify" = true ] || [ "$backuphist_verify" = 1 ] && backuphist_verify=1
+[ -z "$backuphist_verify" ] || [ "$backuphist_verify" = true ] || [ "$backuphist_verify" = 1 ] && backuphist_verify=1
 [ "$backuphist_verify" != 1 ] && backuphist_verify=0
 
     
