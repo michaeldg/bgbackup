@@ -450,12 +450,12 @@ EOF
     $mysqlhistcommand "$historyinsert"
     #verify insert
     verifyinsert=$($mysqlhistcommand "select count(*) from $backuphistschema.backup_history where ${this_hostname_where} and end_time='$endtime'")
-    if [[ "$mysqlhist_is_down:-0" == "0" &&  "$verifyinsert" -eq 1 ]]; then
+    if [[ "${mysqlhist_is_down:-0}" == "0" &&  "$verifyinsert" -eq "1" ]]; then
         log_info "Backup history database record inserted successfully."
     else
         log_info "Backup history database record NOT inserted successfully!"
 
-        log_info "Renaming history failed backupi so that it gets deleted eventually..."
+        log_info "Renaming history failed backup so that it gets deleted eventually..."
         backup_to_rename=$(basename $bulocation)
         mv "${backupdir}/${backup_to_rename}" "${backupdir}/HISTFAILED_${backup_to_rename}"
         bulocation="${backupdir}/HISTFAILED_${backup_to_rename}"
