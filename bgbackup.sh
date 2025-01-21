@@ -107,7 +107,8 @@ function innocreate {
         anyfull=0
     fi
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
-        if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ]; then
+        if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ -n "$force" ]; then
+            [ -n "$force" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
             butype=Full
             dirname="$backupdir/full-$dirdate"
             innocommand="$innocommand $dirname"
@@ -236,8 +237,8 @@ function backer_upper {
         $innocommand 2>> "$logfile"
         log_check
         if [ "$encrypt" = yes ] && [ "$log_status" = "SUCCEEDED" ] ; then
-        checkpointsdecrypt
-    fi
+            checkpointsdecrypt
+        fi
     fi
     if [ "$bktype" = "archive" ] ; then
         $innocommand 2>> "$logfile" | $computil -c > "$arcname"
@@ -677,8 +678,43 @@ trap sigint INT
 
 scriptdir=$( cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
-# find and source the config file
-etccnf=${1:-/etc/bgbackup.cnf}
+# Function to display usage
+usage() {
+    echo "Usage: $0 [-c config_file | --config config_file] [-f | --force] [-v | --verbose] [-d | --debug]"
+    exit 1
+}
+
+etccnf="/etc/bgbackup.cnf"
+force=false
+
+# Parse command line arguments
+while [[ "$#" -gt 0 ]]; do
+    case "$1" in
+        -c|--config)
+            if [[ -n "$2" ]]; then
+                etccnf="$2"
+                shift
+            else
+                echo "Error: --config requires a non-empty option argument."
+                usage
+            fi
+            ;;
+        -f|--force)
+            force=true
+            ;;
+        -v|--verbose)
+            cli_verbose=true
+            ;;
+        -d|--debug)
+            cli_debug=true
+            ;;
+        *)
+            echo "Error: Unknown option $1"
+            usage
+            ;;
+    esac
+    shift
+done
 
 if [ -e "$etccnf" ]; then
     source "$etccnf"
@@ -690,6 +726,9 @@ else
     echo "in the same directory where the script is located"
     exit 1
 fi
+
+[ -n "$cli_verbose" ] && verbose="yes"
+[ -n "$cli_debug" ] && debug="yes"
 
 if [ ! -d "$logpath" ]; then
     echo "Error: Log dir $logpath not found"
@@ -705,6 +744,8 @@ fi
 starttime=$(date +"%Y-%m-%d %H:%M:%S")
 mdate=$(date +%m/%d/%y)    # Date for mail subject. Not in function so set at script start time, not when backup is finished.
 logfile=$logpath/bgbackup_$(date +%Y-%m-%d-%T).log    # logfile
+
+
 
 
 # verify the backup directory exists
@@ -740,6 +781,8 @@ if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     log_info "DEPRECATION WARNING! We now support keeping daily, weekly, monthly and yearly backups. Please specify 'keepdaily=$keepnum' instead of 'keepnum', as this variable might not be supported anymore in future releases."
     keepdaily="$keepnum"
 fi
+
+[ -n "$force" ] && echo "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose."
 
 # Check if we are not running too long (when the disk is full or locked, bgbackup can be stuck
 runtime=`/usr/bin/ps -o etimes= -p "$$"`
@@ -844,5 +887,7 @@ fi
 if [ "$debug" = yes ] ; then
     debugme
 fi
+
+[ -n "$force" ] && echo "Forced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:  \n${bulocation}" 
 
 exit
