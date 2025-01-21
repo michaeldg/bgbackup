@@ -107,8 +107,8 @@ function innocreate {
         anyfull=0
     fi
     if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
-        if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ -n "$force" ]; then
-            [ -n "$force" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
+        if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
+            [ "$force" == "1" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
             butype=Full
             dirname="$backupdir/full-$dirdate"
             innocommand="$innocommand $dirname"
@@ -685,7 +685,7 @@ usage() {
 }
 
 etccnf="/etc/bgbackup.cnf"
-force=false
+force=0
 
 # Parse command line arguments
 while [[ "$#" -gt 0 ]]; do
@@ -700,7 +700,7 @@ while [[ "$#" -gt 0 ]]; do
             fi
             ;;
         -f|--force)
-            force=true
+            force=1
             ;;
         -v|--verbose)
             cli_verbose=true
@@ -782,7 +782,7 @@ if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     keepdaily="$keepnum"
 fi
 
-[ -n "$force" ] && echo "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose."
+[ "$force" == "1" ] && echo "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose."
 
 # Check if we are not running too long (when the disk is full or locked, bgbackup can be stuck
 runtime=`/usr/bin/ps -o etimes= -p "$$"`
@@ -888,6 +888,6 @@ if [ "$debug" = yes ] ; then
     debugme
 fi
 
-[ -n "$force" ] && echo "Forced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:  \n${bulocation}" 
+[ "$force" == "1" ] && echo "Forced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:  \n${bulocation}" 
 
 exit
