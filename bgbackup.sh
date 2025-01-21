@@ -782,7 +782,7 @@ if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     keepdaily="$keepnum"
 fi
 
-[ "$force" == "1" ] && echo -e "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose."
+[ "$force" == "1" ] && echo -e "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose.\n"
 
 # Check if we are not running too long (when the disk is full or locked, bgbackup can be stuck
 runtime=`/usr/bin/ps -o etimes= -p "$$"`
@@ -891,6 +891,6 @@ if [ "$debug" = yes ] ; then
     debugme
 fi
 
-[ "$force" == "1" ] && echo -e "Forced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:\n${bulocation}" 
+[ "$force" == "1" ] && echo -e "\nForced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:\n${bulocation}" 
 
 exit
