@@ -851,9 +851,12 @@ mysqltargetcreate
 
 config_check # Check vital configuration parameters
 
-galera_check # Check if minimum nodes are available on Galera cluster
-
-preflight_check # Run preflight check script to stop (for example) stop backup from running on primary nodes
+if [ "$force" = 0 ]; then
+    galera_check # Check if minimum nodes are available on Galera cluster
+    preflight_check # Run preflight check script to stop (for example) stop backup from running on primary nodes
+else
+    log_info "Skipping galera and preflight checks because --force is enabled"
+fi
 
 backer_upper # Execute the backup.
 
