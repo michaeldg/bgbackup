@@ -224,7 +224,7 @@ function backer_upper {
         sleep 30
     fi
     if [ "$openfilelimit" -gt 0 ]; then 
-        echo "Increasing open files limit to $openfilelimit"
+        log_info "Increasing open files limit to $openfilelimit"
         ulimit -n "$openfilelimit"
     fi
     if [ "$galera" = yes ] ; then
@@ -249,7 +249,7 @@ function backer_upper {
         queue=1
         until [ "$queue" -eq 0 ]; do
             queue=$($mysqltargetcommand" \"show global status like 'wsrep_local_recv_queue';\" -ss" | awk '{ print $2 }')
-            echo "Current queue is $queue, if there is still a queue we wait until we disable desync mode"
+            log_info "Current queue is $queue, if there is still a queue we wait until we disable desync mode"
             sleep 10
         done
         $mysqltargetcommand "SET GLOBAL wsrep_desync=OFF;"
@@ -782,7 +782,7 @@ if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     keepdaily="$keepnum"
 fi
 
-[ "$force" == "1" ] && echo "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose."
+[ "$force" == "1" ] && echo -e "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose."
 
 # Check if we are not running too long (when the disk is full or locked, bgbackup can be stuck
 runtime=`/usr/bin/ps -o etimes= -p "$$"`
@@ -891,6 +891,6 @@ if [ "$debug" = yes ] ; then
     debugme
 fi
 
-[ "$force" == "1" ] && echo "Forced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:  \n${bulocation}" 
+[ "$force" == "1" ] && echo -e "Forced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:\n${bulocation}" 
 
 exit
