@@ -516,16 +516,19 @@ function backup_failed_cleanup {
 
 # Function to dump $backuphistschema schema
 function mdbutil_backup {
-    if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ]; then
+    if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ] &&  [ "$mysqlhist_is_down:-0" == "0"]; then
         mdbutildumpfile="$backupdir"/"$backuphistschema".backup_history-"$dirdate".sql
         $mysqldumpcommand > "$mdbutildumpfile" 2>&1 |grep -v "A partial dump from a server that has GTIDs will by default include the GTIDs "
         log_info "Backup history table dumped to $mdbutildumpfile"
+    else
+        log_info "Backup failed or history system is down. Not creating backup of history database."
     fi
+
 }
 
 # Function to cleanup mdbutil backups
 function mdbutil_backup_cleanup {
-    if [ $log_status = "SUCCEEDED" ]; then
+    if [ $log_status = "SUCCEEDED" ] &&  [ "$mysqlhist_is_down:-0" == "0" ]; then
         delbkuptbllist=$(ls -tp "$backupdir" | grep "$backuphistschema".backup_history | tail -n +$((keepbkuptblnum+=1)))
         for bkuptbltodelete in $delbkuptbllist; do
             rm -f "$backupdir"/"$bkuptbltodelete"
