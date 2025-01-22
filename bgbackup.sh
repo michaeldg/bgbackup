@@ -516,7 +516,7 @@ function backup_failed_cleanup {
 
 # Function to dump $backuphistschema schema
 function mdbutil_backup {
-    if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ] &&  [ "${mysqlhist_is_down:-0" == "0"} ]; then
+    if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ] &&  [ "${mysqlhist_is_down:-0}" == "0" ]; then
         mdbutildumpfile="$backupdir"/"$backuphistschema".backup_history-"$dirdate".sql
         $mysqldumpcommand > "$mdbutildumpfile" 2>&1 |grep -v "A partial dump from a server that has GTIDs will by default include the GTIDs "
         log_info "Backup history table dumped to $mdbutildumpfile"
