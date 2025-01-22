@@ -481,7 +481,7 @@ function backup_cleanup {
 
         log_info "Checking backups to clean up - $keepdaily days to keep."
         delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND ${siblings_hostname_where} and UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-        if [ "$delcount" -gt 0 ]; then
+        if [ -n "$delcount" ] && [ "$delcount" -gt 0 ]; then
             deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL")
             while read -r todelete; do
                 log_info "Deleted backup $todelete"
@@ -516,7 +516,7 @@ function backup_failed_cleanup {
 
 # Function to dump $backuphistschema schema
 function mdbutil_backup {
-    if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ] &&  [ "$mysqlhist_is_down:-0" == "0"]; then
+    if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ] &&  [ "${mysqlhist_is_down:-0" == "0"} ]; then
         mdbutildumpfile="$backupdir"/"$backuphistschema".backup_history-"$dirdate".sql
         $mysqldumpcommand > "$mdbutildumpfile" 2>&1 |grep -v "A partial dump from a server that has GTIDs will by default include the GTIDs "
         log_info "Backup history table dumped to $mdbutildumpfile"
@@ -528,7 +528,7 @@ function mdbutil_backup {
 
 # Function to cleanup mdbutil backups
 function mdbutil_backup_cleanup {
-    if [ $log_status = "SUCCEEDED" ] &&  [ "$mysqlhist_is_down:-0" == "0" ]; then
+    if [ $log_status = "SUCCEEDED" ] &&  [ "${mysqlhist_is_down:-0}" == "0" ]; then
         delbkuptbllist=$(ls -tp "$backupdir" | grep "$backuphistschema".backup_history | tail -n +$((keepbkuptblnum+=1)))
         for bkuptbltodelete in $delbkuptbllist; do
             rm -f "$backupdir"/"$bkuptbltodelete"
