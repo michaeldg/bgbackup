@@ -462,7 +462,7 @@ EOF
 
         log_info "Backup renamed, new backup location is $bulocation"
 
-        log_error "ERROR! Unabled to save backup history, this means incrementals and differentials cannot be created."
+        log_info "WARNING! Unabled to save backup history, this means incrementals and differentials cannot be created. The backup was renamed to HISTFAILED_ to allow it to be rotated."
     fi
 }
 
@@ -517,7 +517,6 @@ function backup_failed_cleanup {
 # Function to dump $backuphistschema schema
 function mdbutil_backup {
     if [ $backuphistschema != "" ] &&  [ $log_status = "SUCCEEDED" ]; then
-        mysqldumpcreate
         mdbutildumpfile="$backupdir"/"$backuphistschema".backup_history-"$dirdate".sql
         $mysqldumpcommand > "$mdbutildumpfile" 2>&1 |grep -v "A partial dump from a server that has GTIDs will by default include the GTIDs "
         log_info "Backup history table dumped to $mdbutildumpfile"
@@ -806,7 +805,7 @@ touch $lockfile
 generate_hostname_where
 
 mysqlhistcreate
-
+mysqldumpcreate
 mysqltargetcreate
 
 [ -z "$backuphist_verify" ] || [ "$backuphist_verify" = true ] || [ "$backuphist_verify" = 1 ] && backuphist_verify=1
