@@ -280,6 +280,7 @@ function backup_write_config {
     echo "#cryptkey=your_crypt_key" >> $conf_file_path
     echo "galera=${galera@Q}" >> $conf_file_path
     echo "slave=${slave@Q}" >> $conf_file_path
+    echo "end_time=${endtime@Q}" >> $conf_file_path
     if [ "$butype" = "Differential" ]; then
         echo "incbase=${diffbase@Q}" >> $conf_file_path
     elif [ "$butype" == "Incremental" ]; then
