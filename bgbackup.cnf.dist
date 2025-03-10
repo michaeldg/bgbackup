@@ -140,6 +140,9 @@ backupdir=/backups
 # Path to keep logs
 logpath=/var/log
 
+# Store log with backup (cryptkey is removed from this log file)
+store_log_with_backup=yes
+
 # Log to syslog
 syslog=no
 

@@ -199,7 +199,7 @@ function innocreate {
     if [ "$slave" = yes ] ; then innocommand=$innocommand" --slave-info" ; fi
     if [ "$parallel" = yes ] ; then innocommand=$innocommand" --parallel=$threads" ; fi
     if [ "$compress" = yes ] ; then innocommand=$innocommand" --compress --compress-threads=$threads" ; fi
-    if [ "$encrypt" = yes ] ; then innocommand=$innocommand" --encrypt=AES256 --encrypt-key-file=$cryptkey" ; fi
+    if [ "$encrypt" = yes ] ; then innocommand=$innocommand" --encrypt=AES256 --encrypt-key=${cryptkey@Q}" ; fi
     if [ "$nolock" = yes ] ; then innocommand=$innocommand" --no-lock" ; fi
     if [ "$nolock" = yes ] && [ "$slave" = yes ] ; then innocommand=$innocommand" --safe-slave-backup" ; fi
     if [ "$rocksdb" = no ] && [ "$backuptool" = "1" ]; then innocommand=$innocommand" --skip-rocksdb-backup" ; fi
@@ -553,6 +553,16 @@ function log_cleanup {
     fi
 }
 
+# Function to copy and secure log to backup directory
+function copy_secured_log_to_backup {
+    cp "$logfile" "$bulocation/bgbackup.log"
+    if [ "$encrypt" = yes ]; then
+        log_info "Replacing cryptkey in log file"
+        sed "s/${cryptkey}/**REDACTED**/g" "$bulocation/bgbackup.log"
+    fi
+    log_info "Copied the log file to the backup directory"
+}
+
 # Function to check config parameters
 function config_check {
     if [[ "$bktype" = "archive" || "$bktype" = "prepared-archive" ]] && [ "$compress" = "yes" ] ; then
@@ -660,6 +670,7 @@ function debugme {
     log_info "mailsubpre: " "$mailsubpre"
     log_info "mdate: " "$mdate"
     log_info "logfile: " "$logfile"
+    log_info "store_log_with_backup: " "$store_log_with_backup"
     log_info "queue: " "$queue"
     log_info "butype: " "$butype"
     log_info "log_status: " "$log_status"
@@ -878,6 +889,10 @@ mdbutil_backup
 mdbutil_backup_cleanup
 
 log_cleanup
+
+if [ "$store_log_with_backup" = yes ]; then
+    copy_secured_log_to_backup
+fi
 
 if ( [ "$log_status" = "FAILED" ] && [ "$mailon" = "failure" ] ) || [ "$mailon" = "all" ] ; then
     mail_log # Mail results to maillist.
