@@ -503,7 +503,7 @@ function backup_cleanup {
 function backup_failed_cleanup {
 
     if [ $butype = "Full" ]; then
-        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -ctime +${keepfaileddays:-365}|grep 'FAILED_')
+        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -mtime +${keepfaileddays:-365}|grep 'FAILED_')
         if [ "$findfailedcmd" != "" ]; then
             while read -r todelete; do
                 rm -Rf "$backupdir/$todelete"
