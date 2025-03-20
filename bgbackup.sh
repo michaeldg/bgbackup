@@ -818,10 +818,14 @@ trap 'rm -f $lockfile' 0
 touch $lockfile
 
 generate_hostname_where
+[ "$debug" = yes ] && log_info "Generated siblings where: $siblings_hostname_where"
 
 mysqlhistcreate
+[ "$debug" = yes ] && log_info "Generated mysql history command: $mysqlhistcommand"
 mysqldumpcreate
+[ "$debug" = yes ] && log_info "Generated mysql history dump: $mysqldumpcommand"
 mysqltargetcreate
+[ "$debug" = yes ] && log_info "Generated mysql history dump: $mysqltargetcommand"
 
 [ -z "$backuphist_verify" ] || [ "$backuphist_verify" = true ] || [ "$backuphist_verify" = 1 ] && backuphist_verify=1
 [ "$backuphist_verify" != 1 ] && backuphist_verify=0
