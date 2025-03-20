@@ -72,9 +72,7 @@ function generate_hostname_where {
 
     this_hostname_where="hostname='$insert_host'"
 
-    siblings_hostname_where="hostname IN ('$insert_host"
-    [ -n "$instance_name" ] && siblings_hostname_where="${siblings_hostname_where}-$instance_name"
-    siblings_hostname_where="${siblings_hostname_where}'"
+    siblings_hostname_where="hostname IN ('$insert_host'"
     
     if [ -n "$siblings" ]; then
         # Use a loop to properly quote each sibling
@@ -745,13 +743,11 @@ fi
 [ -n "$cli_debug" ] && debug="yes"
 
 if [ ! -d "$logpath" ]; then
-    echo "Error: Log dir $logpath not found"
-    exit 1
+    log_error "Error: Log dir $logpath not found"
 fi
 
 if [ ! -w "$logpath" ]; then
-    echo "Error: Log dir $logpath not writeable"
-    exit 1
+    log_error "Error: Log dir $logpath not writeable"
 fi
 
 # Set some specific variables
@@ -818,7 +814,7 @@ trap 'rm -f $lockfile' 0
 touch $lockfile
 
 generate_hostname_where
-[ "$debug" = yes ] && log_info "Generated siblings where: $siblings_hostname_where"
+[ "$debug" = yes ] && log_info "Generated siblings where: $siblings_hostname_where, this hostname where: $this_hostname_where"
 
 mysqlhistcreate
 [ "$debug" = yes ] && log_info "Generated mysql history command: $mysqlhistcommand"
