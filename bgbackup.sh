@@ -482,7 +482,7 @@ function backup_cleanup {
         delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND ${siblings_hostname_where} and UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND status = 'SUCCEEDED' AND deleted_at IS NULL")
         if [ -n "$delcount" ] && [ "$delcount" -gt 0 ]; then
             deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-            while read -r todelete; do
+            while IFS= read -r todelete; do
                 log_info "Deleted backup $todelete"
                 rm -Rf "$todelete"
                 markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND ${siblings_hostname_where} AND status = 'SUCCEEDED'")
@@ -501,9 +501,9 @@ function backup_cleanup {
 function backup_failed_cleanup {
 
     if [ $butype = "Full" ]; then
-        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -mtime +${keepfaileddays:-365}|grep 'FAILED_')
-        if [ "$findfailedcmd" != "" ]; then
-            while read -r todelete; do
+        findfailedcmd=$(find "$backupdir" -maxdepth 1 -type d -mtime +${keepfaileddays:-365} -name '*FAILED_*')
+        if [ -n "$findfailedcmd" ]; then
+            while IFS= read -r todelete; do
                 rm -Rf "$backupdir/$todelete"
                 markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND ${siblings_hostname_where}")
                 log_info "Deleted failed backup $todelete"
