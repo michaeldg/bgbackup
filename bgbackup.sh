@@ -911,4 +911,4 @@ fi
 
 [ "$force" == "1" ] && echo -e "\nForced full backup finished. The status was: $log_status - check the log file in ${log_path}. The backup path:\n${bulocation}" 
 
-exit
+exit 0
