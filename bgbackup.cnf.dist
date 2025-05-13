@@ -146,12 +146,6 @@ store_log_with_backup=yes
 # Log to syslog
 syslog=no
 
-# Backup type (directory or archive)
-bktype=directory
-
-# Archive type (tar or xbstream) for archive backup type
-# arctype=tar
-
 # Used for parallel and compress
 threads=4
 

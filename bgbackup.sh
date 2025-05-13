@@ -55,7 +55,7 @@ function sql_history_down() {
 # Error function
 function log_error() {
     if [ "$syslog" = yes ] ; then
-        logger -p local0.notice -t bgrestore "$*"
+        logger -p local0.notice -t bgbackup "FATAL: $*"
     fi
     printf "%s --> %s\n" "$(date +%Y-%m-%d-%T)" "$*" >>"$logfile"
     printf "%s --> %s\n" "$(date +%Y-%m-%d-%T)" "$*" 1>&2
@@ -104,90 +104,45 @@ function innocreate {
         alreadyfull=0
         anyfull=0
     fi
-    if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
-        if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
-            [ "$force" == "1" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
-            butype=Full
-            dirname="$backupdir/full-$dirdate"
-            innocommand="$innocommand $dirname"
-        else
-            if [ "$differential" = yes ] ; then
-                butype=Differential
-                diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
-                dirname="$backupdir/diff-$dirdate"
+    if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
+        [ "$force" == "1" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
+        butype=Full
+        dirname="$backupdir/full-$dirdate"
+        innocommand="$innocommand $dirname"
+    else
+        if [ "$differential" = yes ] ; then
+            butype=Differential
+            diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+            dirname="$backupdir/diff-$dirdate"
 
-                if [ -d "$diffbase" ]; then
-                    innocommand="$innocommand $dirname"
-                    if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
-                    innocommand=$innocommand" --incremental-basedir=$diffbase"
-                else
-                    log_info "WARNING! Differential basedir $diffbase does not exist! Creating full backup instead."
-                    butype=Full
-                    dirname="$backupdir/full-$dirdate"
-                    innocommand="$innocommand $dirname"
-                fi
+            if [ -d "$diffbase" ]; then
+                innocommand="$innocommand $dirname"
+                if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
+                innocommand=$innocommand" --incremental-basedir=$diffbase"
             else
-                butype=Incremental
-                incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
-                if [ -d "$incbase" ]; then
-                    dirname="$backupdir/incr-$dirdate"
-                    innocommand="$innocommand $dirname"
-                    if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
-                    innocommand=$innocommand" --incremental-basedir=$incbase"
-                else
-                    log_info "WARNING! Incremental basedir $incbase does not exist! Creating full backup instead."
-                    butype=Full
-                    dirname="$backupdir/full-$dirdate"
-                    innocommand="$innocommand $dirname"
-                fi
+                log_info "WARNING! Differential basedir $diffbase does not exist! Creating full backup instead."
+                butype=Full
+                dirname="$backupdir/full-$dirdate"
+                innocommand="$innocommand $dirname"
             fi
-        fi
-    elif [ "$bktype" = "archive" ] ; then
-
-        [ ! -d $backupdir/.lsn ] && mkdir $backupdir/.lsn
-        [ ! -d $backupdir/.lsn_full ] && mkdir $backupdir/.lsn_full
-
-	#if tempfolder is not set then  use /tmp
-	if [ -z "$tempfolder" ]	
-         then
-   		tempfolder=/tmp
-	fi
- 
-	# verify the tempfolder directory exists
-	if [ ! -d "$tempfolder" ]
-	then
-    		log_info "Error: $tempfolder  directory not found"
-    		log_error "The configured directory for tempfolders does not exist. Please create this first."
-	fi
-
-	# verify user running script has permissions needed to write to tempfolder  directory
-	if [ ! -w "$tempfolder" ]; then
-    		log_info "Error: $tempfolder  directory is not writable."
-    		log_error "Verify the user running this script has write access to the configured tempfolder directory."
-	fi
-
-
-        if [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ] ; then
-            butype=Full
-            innocommand=$innocommand" $tempfolder --stream=$arctype --extra-lsndir=$backupdir/.lsn_full"
-            arcname="$backupdir/full-$dirdate.$arctype.gz"
         else
-            if [ "$differential" = yes ] ; then
-                butype=Differential
-                innocommand=$innocommand" $tempfolder --stream=$arctype"
-                if [ "$has_innobackupex == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
-                innocommand=$innocommand" --incremental-basedir=$backupdir/.lsn_full --extra-lsndir=$backupdir/.lsn"
-                arcname="$backupdir/diff-$dirdate.$arctype.gz"
+            butype=Incremental
+            incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+            if [ -d "$incbase" ]; then
+                dirname="$backupdir/incr-$dirdate"
+                innocommand="$innocommand $dirname"
+                if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
+                innocommand=$innocommand" --incremental-basedir=$incbase"
             else
-                butype=Incremental
-                innocommand=$innocommand" $tempfolder --stream=$arctype"
-                if [ "$has_innobackupex == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
-                innocommand=$innocommand" --incremental-basedir=$backupdir/.lsn --extra-lsndir=$backupdir/.lsn"
-                arcname="$backupdir/inc-$dirdate.$arctype.gz"
+                log_info "WARNING! Incremental basedir $incbase does not exist! Creating full backup instead."
+                butype=Full
+                dirname="$backupdir/full-$dirdate"
+                innocommand="$innocommand $dirname"
             fi
         fi
     fi
-    if [ -n "$databases" ] && [ "$bktype" = "prepared-archive" ]; then innocommand=$innocommand" --databases=$databases"; fi
+
+
     [ ! -z "$backupuser" ] && innocommand=$innocommand" --user=$backupuser"
     [ ! -z "$backuppass" ] && innocommand=$innocommand" --password=$backuppass"
     [ ! -z "$socket" ] && innocommand=$innocommand" --socket=$socket"
@@ -231,17 +186,9 @@ function backer_upper {
     fi
     log_info "Beginning ${butype} Backup"
     log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=.* /password=XXX /g')"
-    if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
-        $innocommand 2>> "$logfile"
-        log_check
-        if [ "$encrypt" = yes ] && [ "$log_status" = "SUCCEEDED" ] ; then
-            checkpointsdecrypt
-        fi
-    fi
-    if [ "$bktype" = "archive" ] ; then
-        $innocommand 2>> "$logfile" | $computil -c > "$arcname"
-        log_check
-    fi
+    $innocommand 2>> "$logfile"
+    log_check
+
     if [ "$galera" = yes ] ; then
         log_info "Disabling WSREP desync."
         queue=1
@@ -252,13 +199,11 @@ function backer_upper {
         done
         $mysqltargetcommand "SET GLOBAL wsrep_desync=OFF;"
     fi
+
     if [ "$monyog" = yes ] ; then
         log_info "Enabling MONyog alerts"
         monyog enable
         sleep 30
-    fi
-    if [ "$log_status" = "SUCCEEDED" ] && [ "$bktype" == "prepared-archive" ] ; then
-        backup_prepare
     fi
     log_info "$butype backup $log_status"
     log_info "CAUTION: ALWAYS VERIFY YOUR BACKUPS."
@@ -286,24 +231,7 @@ function backup_write_config {
     fi
 
     log_info "Wrote backup configuration file $conf_file_path"
-    # VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
-}
-
-# Function to prepare backup
-function backup_prepare {
-    if [ "$backuptool" == "1" ] ; then
-        prepcommand="$innobackupex --prepare --target-dir $dirname"
-    else
-        prepcommand="$innobackupex $dirname --apply-log"
-    fi
-    if [ -n "$databases" ]; then prepcommand=$prepcommand" --export"; fi
-    log_info "Preparing backup."
-    $prepcommand 2>> "$logfile"
-    log_check
-    log_info "Backup prepare complete."
-    log_info "Archiving backup."
-    tar cf "$dirname.tar.gz" -C "$dirname" -I "$computil" . && rm -rf "$dirname"
-    log_info "Archiving complete."
+    # VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 }
 
 # Function to build mysql history command
@@ -364,8 +292,6 @@ butype varchar(20) DEFAULT NULL,
 weekly tinyint UNSIGNED NOT NULL,
 monthly tinyint UNSIGNED NOT NULL,
 yearly tinyint UNSIGNED NOT NULL,
-bktype varchar(20) DEFAULT NULL,
-arctype varchar(20) DEFAULT NULL,
 compressed varchar(5) DEFAULT NULL,
 encrypted varchar(5) DEFAULT NULL,
 cryptkey varchar(255) DEFAULT NULL,
@@ -406,23 +332,19 @@ EOF
 function backup_history_and_mark_failed {
     server_version=$(mysqld -V)
     xtrabackup_version=$(xtrabackup --version 2>&1|grep 'based')
-    if [ "$bktype" = "directory" ] || [ "$bktype" = "prepared-archive" ]; then
-        bulocation="$dirname"
-        if [ ! -d "$bulocation" ]; then
-          # Directory does not exist, create it
-          mkdir -p "$bulocation"
-          log_info "Backup did not produce any files, directory '$bulocation' now created."
+    bulocation="$dirname"
 
-          # Create a warning file inside the new directory
-          warning_file="$bulocation/warning.txt"
-          echo "Warning: This directory was created because it did not exist." > "$warning_file"
-          log_info "Warning file created at '$warning_file'."
-        fi
-        backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
-    elif [ "$bktype" = "archive" ] ; then
-        backup_size=$(du -sm "$arcname" | awk '{ print $1 }')"M"
-        bulocation="$arcname"
+    if [ ! -d "$bulocation" ]; then
+      # Directory does not exist, create it
+      mkdir -p "$bulocation"
+      log_info "Backup did not produce any files, directory '$bulocation' now created."
+
+      # Create a warning file inside the new directory
+      warning_file="$bulocation/warning.txt"
+      echo "Warning: This directory was created because it did not exist." > "$warning_file"
+      log_info "Warning file created at '$warning_file'."
     fi
+    backup_size=$(du -sm "$dirname" | awk '{ print $1 }')"M"
 
     if [ "$log_status" != "SUCCEEDED" ]; then
         log_info "Renaming failed backup from $bulocation..."
@@ -442,8 +364,8 @@ function backup_history_and_mark_failed {
     [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND yearly=1")
 
     historyinsert=$(cat <<EOF
-INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, bktype, arctype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
-VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$bktype", "$arctype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
+INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
+VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 EOF
 )
     $mysqlhistcommand "$historyinsert"
@@ -563,13 +485,6 @@ function copy_secured_log_to_backup {
 
 # Function to check config parameters
 function config_check {
-    if [[ "$bktype" = "archive" || "$bktype" = "prepared-archive" ]] && [ "$compress" = "yes" ] ; then
-        log_info "Archive backup type selected, disabling built-in compression."
-        compress="no"
-    fi
-    if [[ "$computil" != "gzip" && "$computil" != "pigz"* ]] && [ "$bktype" = "archive" ]; then
-        log_error "Fatal: $computil compression method is unsupported."
-    fi
 
     if [ "$galera" = "yes" ]; then
         has_galera=$($mysqltargetcommand "SHOW GLOBAL VARIABLES LIKE 'wsrep_provider_options'" | grep 'wsrep_provider'|grep 'libgalera' | wc -l)
@@ -640,8 +555,6 @@ function debugme {
     log_info "hostport: " "$hostport"
     log_info "backupuser: " "$backupuser"
     log_info "backuppass: " "$backuppass"
-    log_info "bktype: " "$bktype"
-    log_info "arctype: " "$arctype"
     log_info "monyog: " "$monyog"
     log_info "monyogserver: " "$monyogserver"
     log_info "monyoguser: " "$monyoguser"
