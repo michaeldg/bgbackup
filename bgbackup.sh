@@ -734,7 +734,7 @@ mysqlhistcreate
 mysqldumpcreate
 [ "$debug" = yes ] && log_info "Generated mysql history dump: $mysqldumpcommand"
 mysqltargetcreate
-[ "$debug" = yes ] && log_info "Generated mysql history dump: $mysqltargetcommand"
+[ "$debug" = yes ] && log_info "Generated mysql target command: $mysqltargetcommand"
 
 [ -z "$backuphist_verify" ] || [ "$backuphist_verify" = true ] || [ "$backuphist_verify" = 1 ] && backuphist_verify=1
 [ "$backuphist_verify" != 1 ] && backuphist_verify=0
