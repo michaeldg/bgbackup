@@ -97,7 +97,7 @@ function innocreate {
     [ -n "$defaults_extra_file" ] && innocommand=$innocommand" --defaults-extra-file=$defaults_extra_file"
     if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
-    if [[ "$mysqlhist_is_down:-0" == "0" ]]; then
+    if [[ "${mysqlhist_is_down:-0}" == "0" ]]; then
         alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
         anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
     else
@@ -755,7 +755,7 @@ if [ "$?" -eq 1 ]; then
     mysqlhist_is_down=1
 fi
 
-if [[ "$mysqlhist_is_down:-0" == "0" ]]; then
+if [[ "${mysqlhist_is_down:-0}" == "0" ]]; then
     # Check that the database exists before continuing further
     $mysqlhistcommand "USE $backuphistschema"
     if [ "$?" -eq 1 ]; then
