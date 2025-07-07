@@ -104,7 +104,7 @@ function innocreate {
         alreadyfull=0
         anyfull=0
     fi
-    if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ]) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
+    if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ] ) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
         [ "$force" == "1" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
         butype=Full
         dirname="$backupdir/full-$dirdate"
