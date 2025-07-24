@@ -497,7 +497,7 @@ function config_check {
 
     # Verify if fullbackupday is set correctly
     found_fullbackup_timing=false
-    fullbackup_options=("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "Everyday", "Always")
+    fullbackup_options=("Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday" "Sunday" "Everyday" "Always")
     for day in "${fullbackup_options[@]}"; do
         if [[ "$day" == "$fullbackday" ]]; then
             found_fullbackup_timing=true
@@ -505,7 +505,7 @@ function config_check {
     done
 
     if [[ "$found_fullbackup_timing" == false ]]; then
-        log_error "Fatal: fullbackupday must be any of Monday Tuesday Wednesday Thursday Friday Saturday Sunday Everyday Always"
+        log_error "Fatal: fullbackupday must be any of Monday Tuesday Wednesday Thursday Friday Saturday Sunday Everyday Always; '$fullbackday' is something else."
     fi
 
 }
