@@ -98,14 +98,17 @@ function innocreate {
     if [[ "$has_innobackupex" == 0 ]] ; then innocommand=$innocommand" --backup --target-dir" ; fi
     dirdate=$(date +%Y-%m-%d_%H-%M-%S)
     if [[ "${mysqlhist_is_down:-0}" == "0" ]]; then
-        alreadyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
-        anyfull=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
+        alreadyfulltoday=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
+        alreadyfullthisweek=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE UNIX_TIMESTAMP(end_time) > UNIX_TIMESTAMP() - 604800 AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
     else
-        alreadyfull=0
-        anyfull=0
+        log_info "No history server found, so we cannot detect if a full backup already  ran today or this week. Pull requests are welcome to implement  this."
+        alreadyfulltoday=0
+        alreadyfullthisweek=0
     fi
-    if ( ( [ "$(date +%A)" = "$fullbackday" ] || [ "$fullbackday" = "Everyday" ] ) && [ "$alreadyfull" -eq 0 ] ) || [ "$anyfull" -eq 0 ] || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
-        [ "$force" == "1" ] && log_info "Creating full backup because FORCE was passed in CLI arguments."
+
+    if ( [ "$(date +%A)" = "$fullbackday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || ( [ "$fullbackday" = "Everyday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
+        log_info "Creating full backup because:\n Force: ${force} (can be passed in CLI arguments)\nFull backup day: ${fullbackupday}\nalreadyfulltoday: ${alreadyfulltoday}\nalreadyfullthisweek: ${alreadyfullthisweek}"
+
         butype=Full
         dirname="$backupdir/full-$dirdate"
         innocommand="$innocommand $dirname"
