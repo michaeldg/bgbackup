@@ -389,7 +389,7 @@ EOF
 
 # Function to cleanup backups.
 function backup_cleanup {
-    if [ $log_status = "SUCCEEDED" ] && [ $butype = "Full" ]; then
+    if [ $log_status = "SUCCEEDED" ]; then
 
         log_info "Marking expired week backups as deletable backup"
         $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET weekly=2 WHERE ${siblings_hostname_where} AND weekly=1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (604800 * ($keepweekly + 1))"
@@ -545,6 +545,16 @@ function preflight_check {
     fi
 }
 
+# Function to calculate the ceiling of a division
+function ceil {
+    echo "$(($1 + $2 - 1)) / $2" | bc
+}
+
+# Function to get the maximum of two numbers
+function max {
+    echo "$1 > $2" | bc -l
+}
+
 # Debug variables function
 function debugme {
     log_info "defaults file: " "$defaults_file"
@@ -668,9 +678,6 @@ starttime=$(date +"%Y-%m-%d %H:%M:%S")
 mdate=$(date +%m/%d/%y)    # Date for mail subject. Not in function so set at script start time, not when backup is finished.
 logfile=$logpath/bgbackup_$(date +%Y-%m-%d-%T).log    # logfile
 
-
-
-
 # verify the backup directory exists
 if [ ! -d "$backupdir" ]
 then
@@ -703,6 +710,18 @@ fi
 if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     log_info "DEPRECATION WARNING! We now support keeping daily, weekly, monthly and yearly backups. Please specify 'keepdaily=$keepnum' instead of 'keepnum', as this variable might not be supported anymore in future releases."
     keepdaily="$keepnum"
+fi
+
+new_keep_weekly=$(max $keep_weekly $(ceil $keep_daily 7))
+if [[ "$new_keep_weekly" -gt "$keep_weekly" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" ]]; then
+    log_info "NOTICE: We increase keep_weekly to $new_keep_weekly, because otherwise original backup might be deleted where incrementals or differentials depend on that full backup. To avoid this, create full backups every day."
+    keep_weekly="$new_keep_weekly"
+fi
+
+new_keep_daily=$($keep_daily + $keep_daily % 7)
+if [[ "$new_keep_daily" -gt "$keep_daily" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" && $differential != "yes" ]]; then
+    log_info "NOTICE: We increase keep_weekly to $new_keep_daily, because otherwise intermediate incremental backups might be deleted where more recent incrementals still depend on for recovery. To avoid this, enable differential backups or create full backyups every day."
+    keep_daily="$new_keep_daily"
 fi
 
 [ "$force" == "1" ] && echo -e "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose.\n"
