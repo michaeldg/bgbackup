@@ -108,7 +108,7 @@ monyoghost=
 monyogport=
 
 # Day of week to do full backup. Set to "Everyday" to do full backup everyday (subsequent daily backups will be incremental)
-fullbackday=Everyday
+fullbackupday=Everyday
 # If you want every backup to be a full backup you can specify "Always" as fullbackupday.
 
 # Differential does incremental backup based on the last full backup instead of last full or incremental
