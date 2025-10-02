@@ -715,15 +715,15 @@ if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     keepdaily="$keepnum"
 fi
 
-new_keep_weekly=$(max $keep_weekly $(ceil $keepdaily 7))
-if [[ "$new_keep_weekly" -gt "$keep_weekly" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" ]]; then
-    log_info "NOTICE: We increase keep_weekly to $new_keep_weekly, because otherwise original backup might be deleted where incrementals or differentials depend on that full backup. To avoid this, create full backups every day."
-    keep_weekly="$new_keep_weekly"
+new_keepweekly=$(max $keepweekly $(ceil $keepdaily 7))
+if [[ "$new_keepweekly" -gt "$keepweekly" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" ]]; then
+    log_info "NOTICE: We increase keepweekly to $new_keepweekly, because otherwise original backup might be deleted where incrementals or differentials depend on that full backup. To avoid this, create full backups every day."
+    keepweekly="$new_keepweekly"
 fi
 
 new_keepdaily=$(echo "$keepdaily + $keepdaily % 7" | bc)
 if [[ "$new_keepdaily" -gt "$keepdaily" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" && $differential != "yes" ]]; then
-    log_info "NOTICE: We increase keep_weekly to $new_keepdaily, because otherwise intermediate incremental backups might be deleted where more recent incrementals still depend on for recovery. To avoid this, enable differential backups or create full backyups every day."
+    log_info "NOTICE: We increase keepweekly to $new_keepdaily, because otherwise intermediate incremental backups might be deleted where more recent incrementals still depend on for recovery. To avoid this, enable differential backups or create full backyups every day."
     keepdaily="$new_keepdaily"
 fi
 
