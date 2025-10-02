@@ -106,7 +106,7 @@ function innocreate {
         alreadyfullthisweek=0
     fi
 
-    if ( [ "$(date +%A)" = "$fullbackday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || ( [ "$fullbackday" = "Everyday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || [ "$fullbackday" = "Always" ] || [ "$force" == "1" ]; then
+    if ( [ "$(date +%A)" = "$fullbackupday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || ( [ "$fullbackupday" = "Everyday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || [ "$fullbackupday" = "Always" ] || [ "$force" == "1" ]; then
         log_info "Creating full backup because:\n Force: ${force} (can be passed in CLI arguments)\nFull backup day: ${fullbackupday}\nalreadyfulltoday: ${alreadyfulltoday}\nalreadyfullthisweek: ${alreadyfullthisweek}"
 
         butype=Full
@@ -502,13 +502,13 @@ function config_check {
     found_fullbackup_timing=false
     fullbackup_options=("Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday" "Sunday" "Everyday" "Always")
     for day in "${fullbackup_options[@]}"; do
-        if [[ "$day" == "$fullbackday" ]]; then
+        if [[ "$day" == "$fullbackupday" ]]; then
             found_fullbackup_timing=true
         fi
     done
 
     if [[ "$found_fullbackup_timing" == false ]]; then
-        log_error "Fatal: fullbackupday must be any of Monday Tuesday Wednesday Thursday Friday Saturday Sunday Everyday Always; '$fullbackday' is something else."
+        log_error "Fatal: fullbackupday must be any of Monday Tuesday Wednesday Thursday Friday Saturday Sunday Everyday Always; '$fullbackupday' is something else."
     fi
 
 }
@@ -715,16 +715,16 @@ if [[ -n "$keepnum" && -z "$keepdaily" ]]; then
     keepdaily="$keepnum"
 fi
 
-new_keep_weekly=$(max $keep_weekly $(ceil $keep_daily 7))
+new_keep_weekly=$(max $keep_weekly $(ceil $keepdaily 7))
 if [[ "$new_keep_weekly" -gt "$keep_weekly" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" ]]; then
     log_info "NOTICE: We increase keep_weekly to $new_keep_weekly, because otherwise original backup might be deleted where incrementals or differentials depend on that full backup. To avoid this, create full backups every day."
     keep_weekly="$new_keep_weekly"
 fi
 
-new_keep_daily=$($keep_daily + $keep_daily % 7)
-if [[ "$new_keep_daily" -gt "$keep_daily" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" && $differential != "yes" ]]; then
-    log_info "NOTICE: We increase keep_weekly to $new_keep_daily, because otherwise intermediate incremental backups might be deleted where more recent incrementals still depend on for recovery. To avoid this, enable differential backups or create full backyups every day."
-    keep_daily="$new_keep_daily"
+new_keepdaily=$(echo "$keepdaily + $keepdaily % 7" | bc)
+if [[ "$new_keepdaily" -gt "$keepdaily" && "$fullbackday" != "Everyday" && "$fullbackday" != "Always" && $differential != "yes" ]]; then
+    log_info "NOTICE: We increase keep_weekly to $new_keepdaily, because otherwise intermediate incremental backups might be deleted where more recent incrementals still depend on for recovery. To avoid this, enable differential backups or create full backyups every day."
+    keepdaily="$new_keepdaily"
 fi
 
 [ "$force" == "1" ] && echo -e "Forcing a full backup. When finished, the backup path will be printed.\n\nThe backup will be rotated normally, after $keepdaily days (possibly longer in case weekly, monthly or yearly retention is enabled.\n\nTo enable extra debug information or print the log output, add --debug and/or --verbose.\n"
