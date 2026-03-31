@@ -406,7 +406,7 @@ function backup_cleanup {
         log_info "Checking backups to clean up - $keepdaily days to keep."
         delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND ${siblings_hostname_where} and UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND status = 'SUCCEEDED' AND deleted_at IS NULL")
         if [ -n "$delcount" ] && [ "$delcount" -gt 0 ]; then
-            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL")
+            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < CAST(DATE_SUB(CURDATE(), INTERVAL $keepdaily DAY) AS DATETIME) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL")
             while IFS= read -r todelete; do
                 log_info "Deleted backup $todelete"
                 rm -Rf "$todelete"
