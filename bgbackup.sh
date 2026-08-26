@@ -91,6 +91,117 @@ function generate_hostname_where {
 }
 
 
+# Turn a cron-style hour field (single value, comma list, step range, wildcard,
+# or wildcard-step) into a sorted, deduplicated list of hours on stdout.
+# Unrecognised parts are silently skipped -- an unparseable spec should degrade
+# to "not enough data to project" (see count_remaining_differentials), never
+# break a real backup run.
+function expand_hour_spec {
+    local spec="$1" part
+    local -a parts
+    IFS=',' read -ra parts <<< "$spec"
+    for part in "${parts[@]}"; do
+        if [[ "$part" == "*" ]]; then
+            seq 0 23
+        elif [[ "$part" =~ ^\*/([0-9]+)$ ]]; then
+            seq 0 "${BASH_REMATCH[1]}" 23
+        elif [[ "$part" =~ ^([0-9]+)-([0-9]+)/([0-9]+)$ ]]; then
+            seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[3]}" "${BASH_REMATCH[2]}"
+        elif [[ "$part" =~ ^([0-9]+)-([0-9]+)$ ]]; then
+            seq "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+        elif [[ "$part" =~ ^[0-9]+$ ]]; then
+            echo "$part"
+        fi
+    done | sort -nu
+}
+
+# Estimate how many Differential runs happen from this run (inclusive) through
+# the run immediately before the next scheduled Full. Only bgbackup_hour is
+# parsed; bgbackup_dayofweek/dayofmonth/month are assumed unrestricted (every
+# calendar day runs). Prints nothing if bgbackup_hour doesn't parse or
+# fullbackupday isn't "Everyday"/a weekday name -- caller treats that as
+# "can't project".
+function count_remaining_differentials {
+    local -a hours
+    mapfile -t hours < <(expand_hour_spec "$bgbackup_hour")
+    [ "${#hours[@]}" -eq 0 ] && return
+
+    # 10# forces base-10 so a leading-zero hour like 08/09 isn't misread as
+    # (invalid) octal.
+    local current_hour=$((10#$(date +%H)))
+    local runs_today=0 h
+    for h in "${hours[@]}"; do
+        [ "$h" -ge "$current_hour" ] && runs_today=$((runs_today + 1))
+    done
+
+    local next_full_date
+    case "$fullbackupday" in
+        Everyday)
+            next_full_date="tomorrow"
+            ;;
+        Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)
+            # GNU date's "next <day>" always resolves 1-7 days out, never
+            # today -- correct here since reaching this function at all means
+            # today's Full (if fullbackupday is today) already happened.
+            next_full_date="next $fullbackupday"
+            ;;
+        *)
+            # Always can't reach here (every run is already a Full); anything
+            # else is an unrecognised value -- can't project either way.
+            return
+            ;;
+    esac
+
+    # "00:00" (not "today"): GNU date's "today" keeps the current wall-clock
+    # time, which would make this diff fractional-day and floor to the wrong
+    # value depending on what time bgbackup happens to run.
+    local days_until_full=$(( ( $(date -d "$next_full_date" +%s) - $(date -d "00:00" +%s) ) / 86400 ))
+    [ "$days_until_full" -lt 1 ] && return
+
+    echo $(( runs_today + ${#hours[@]} * (days_until_full - 1) ))
+}
+
+# Decide whether today's Differential should be upgraded to a Full because the
+# backup-host disk footprint of this cycle's differentials is projected to get
+# too large. Motivating case: a migration or other one-off event touches a
+# large chunk of the database -- since a Differential is cumulative since the
+# Full (not since the last Differential), that bulge persists in every
+# Differential taken for the rest of the cycle once it happens.
+#
+# This is reactive with a one-run lag: it projects from the *previous*
+# Differential's already-known size, so it can't know how big *today's*
+# backup will be until it's actually taken. It can't prevent the Differential
+# that first captures a size spike from itself coming out oversized -- it
+# prevents every subsequent run from compounding further on top of it, by
+# upgrading at the next decision point instead.
+function differential_upgrade_needed {
+    [ "${mysqlhist_is_down:-0}" != "0" ] && return 1
+
+    local full_size prev_diff_size remaining_diffs projected_size threshold_size
+
+    full_size=$($mysqlhistcommand "SELECT backup_size FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+    prev_diff_size=$($mysqlhistcommand "SELECT backup_size FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Differential' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+    { [ -z "$full_size" ] || [ -z "$prev_diff_size" ] ; } && return 1
+
+    remaining_diffs=$(count_remaining_differentials)
+    { [ -z "$remaining_diffs" ] || [ "$remaining_diffs" -le 0 ] ; } && return 1
+
+    projected_size=$(( ${prev_diff_size%M} * remaining_diffs ))
+    threshold_size=$(( ${full_size%M} * ${diffupgradepct:-150} / 100 ))
+
+    if [ "$projected_size" -gt "$threshold_size" ]; then
+        # Separate log_info calls, not one string with embedded \n -- log_info's
+        # printf "%s" never expands \n inside the substituted message, so a
+        # single multi-line string would render with literal backslash-n's.
+        log_info "WARNING! Differential backup chain is projected to grow too large -- taking a FULL backup instead of a Differential this run."
+        log_info "  Reason: previous differential (${prev_diff_size%M}M) x ${remaining_diffs} differentials still expected before the next scheduled full (this run included) = ${projected_size}M projected,"
+        log_info "  which exceeds ${diffupgradepct:-150}% of the full backup's own size (${full_size%M}M) -- threshold was ${threshold_size}M."
+        log_info "  Taking a Full now instead to avoid an oversized differential chain on disk."
+        return 0
+    fi
+    return 1
+}
+
 function innocreate {
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
@@ -107,7 +218,11 @@ function innocreate {
     fi
 
     if ( [ "$(date +%A)" = "$fullbackupday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || ( [ "$fullbackupday" = "Everyday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || [ "$fullbackupday" = "Always" ] || [ "$force" == "1" ]; then
-        log_info "Creating full backup because:\n Force: ${force} (can be passed in CLI arguments)\nFull backup day: ${fullbackupday}\nalreadyfulltoday: ${alreadyfulltoday}\nalreadyfullthisweek: ${alreadyfullthisweek}"
+        log_info "Creating full backup because:"
+        log_info "  Force: ${force} (can be passed in CLI arguments)"
+        log_info "  Full backup day: ${fullbackupday}"
+        log_info "  alreadyfulltoday: ${alreadyfulltoday}"
+        log_info "  alreadyfullthisweek: ${alreadyfullthisweek}"
 
         butype=Full
         dirname="$backupdir/full-$dirdate"
@@ -118,12 +233,12 @@ function innocreate {
             diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
             dirname="$backupdir/diff-$dirdate"
 
-            if [ -d "$diffbase" ]; then
+            if [ -d "$diffbase" ] && ! differential_upgrade_needed ; then
                 innocommand="$innocommand $dirname"
                 if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$diffbase"
             else
-                log_info "WARNING! Differential basedir $diffbase does not exist! Creating full backup instead."
+                [ ! -d "$diffbase" ] && log_info "WARNING! Differential basedir $diffbase does not exist! Creating full backup instead."
                 butype=Full
                 dirname="$backupdir/full-$dirdate"
                 innocommand="$innocommand $dirname"

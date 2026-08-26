@@ -30,6 +30,12 @@ Differential backups contain the changed data since the last successful full bac
 
 Incremental backups are performed by default. To enable differential backups, set `differential=yes`.  
 
+### Automatic upgrade to Full when a Differential would grow too large
+
+Since a Differential is cumulative since the last Full (not since the last Differential), a one-off event that touches a large chunk of the database -- a migration, for example -- makes every Differential taken for the rest of the cycle bigger, not just the one that first captured it. To guard against that, bgbackup projects the size of this cycle's remaining Differentials (previous differential's size x differentials still expected before the next scheduled Full, this run included) before taking one; if that projection exceeds `diffupgradepct` (default `150`, i.e. 150% of the Full's own size), it takes a Full instead and logs a warning explaining why.
+
+This only applies with `differential=yes`; incremental mode is unaffected. It's reactive with a one-run lag -- it can't know how big *today's* Differential will be until it's taken, so the Differential that first captures a size spike will still come out oversized. What it prevents is every subsequent day compounding further on top of an already-bloated chain.
+
 ### Emails
 
 Details about all backups are emailed to all email addresses listed in MAILLIST if `mailonsuccess` is enabled. Otherwise, only details about failed backups are emailed. 

@@ -134,6 +134,11 @@ keeplognum=1000
 # Number of days to keep failed backups
 keepfaileddays=365
 
+# When a Differential's projected size (previous differential's size x
+# differentials still expected before the next full, this run included)
+# exceeds this percentage of the full backup's own size, take a full instead.
+diffupgradepct=150
+
 # Full path to backup directory root
 backupdir=/backups
 
