@@ -36,6 +36,12 @@ Since a Differential is cumulative since the last Full (not since the last Diffe
 
 This only applies with `differential=yes`; incremental mode is unaffected. It's reactive with a one-run lag -- it can't know how big *today's* Differential will be until it's taken, so the Differential that first captures a size spike will still come out oversized. What it prevents is every subsequent day compounding further on top of an already-bloated chain.
 
+### Automatic upgrade to Full when the server or backup tool version has changed
+
+A Differential is only meaningful applied on top of the exact Full it was taken against. If the MySQL/MariaDB server or the xtrabackup/mariabackup tool has been upgraded (or downgraded) since the last Full backup, bgbackup takes a Full instead of a Differential this run and logs why, rather than chaining a Differential from a new version onto a Full from an old one.
+
+This only applies with `differential=yes`. Both the server version (`mysqld -V`) and the backup tool version are compared against what was recorded for the last successful Full; either one differing is enough to trigger the upgrade.
+
 ### Emails
 
 Details about all backups are emailed to all email addresses listed in MAILLIST if `mailonsuccess` is enabled. Otherwise, only details about failed backups are emailed. 

@@ -202,6 +202,49 @@ function differential_upgrade_needed {
     return 1
 }
 
+# Decide whether today's Differential should be upgraded to a Full because
+# the last Full backup was taken with a different MySQL/MariaDB server
+# version or a different xtrabackup/mariabackup version than this run would
+# use. A Differential is only meaningful applied on top of the Full it was
+# actually taken against -- prepare/restore across a version bump the
+# Differential wasn't taken with is exactly the kind of mismatch that can
+# silently fail or corrupt later, so start a clean chain instead. Uses the
+# exact same commands already used to record these values in
+# backup_history_and_mark_failed, so "current" and "recorded" are always
+# compared on a like-for-like basis.
+function differential_version_mismatch {
+    [ "${mysqlhist_is_down:-0}" != "0" ] && return 1
+
+    local last_full_server_version last_full_xtrabackup_version current_server_version current_xtrabackup_version
+
+    last_full_server_version=$($mysqlhistcommand "SELECT server_version FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+    last_full_xtrabackup_version=$($mysqlhistcommand "SELECT xtrabackup_version FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+    [ -z "$last_full_server_version" ] && return 1
+
+    current_server_version=$(mysqld -V)
+    # $innobackupex, not a literal "xtrabackup" -- see the matching comment
+    # in backup_history_and_mark_failed.
+    current_xtrabackup_version=$($innobackupex --version 2>&1|grep 'based')
+
+    if [ "$current_server_version" != "$last_full_server_version" ]; then
+        log_info "WARNING! MySQL/MariaDB server version has changed since the last Full backup -- taking a FULL backup instead of a Differential this run."
+        log_info "  Last Full was taken with: ${last_full_server_version}"
+        log_info "  This run would use:       ${current_server_version}"
+        log_info "  A Differential must be applied on top of a Full taken with a matching version; taking a Full now to start a clean chain."
+        return 0
+    fi
+
+    if [ "$current_xtrabackup_version" != "$last_full_xtrabackup_version" ]; then
+        log_info "WARNING! xtrabackup/mariabackup version has changed since the last Full backup -- taking a FULL backup instead of a Differential this run."
+        log_info "  Last Full was taken with: ${last_full_xtrabackup_version}"
+        log_info "  This run would use:       ${current_xtrabackup_version}"
+        log_info "  A Differential must be applied on top of a Full taken with a matching version; taking a Full now to start a clean chain."
+        return 0
+    fi
+
+    return 1
+}
+
 function innocreate {
     innocommand="$innobackupex"
     [ -n "$defaults_file" ] && innocommand=$innocommand" --defaults-file=$defaults_file"
@@ -233,7 +276,7 @@ function innocreate {
             diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
             dirname="$backupdir/diff-$dirdate"
 
-            if [ -d "$diffbase" ] && ! differential_upgrade_needed ; then
+            if [ -d "$diffbase" ] && ! differential_upgrade_needed && ! differential_version_mismatch ; then
                 innocommand="$innocommand $dirname"
                 if [ "$has_innobackupex" == "1" ] ; then innocommand=$innocommand" --incremental" ; fi
                 innocommand=$innocommand" --incremental-basedir=$diffbase"
@@ -449,7 +492,12 @@ EOF
 # Function to write backup history to database
 function backup_history_and_mark_failed {
     server_version=$(mysqld -V)
-    xtrabackup_version=$(xtrabackup --version 2>&1|grep 'based')
+    # $innobackupex, not a literal "xtrabackup" -- that command doesn't exist
+    # at all on backuptool=1 (MariaDB Backup) hosts, only mariabackup does;
+    # $innobackupex is already resolved to whichever of mariabackup/
+    # innobackupex/xtrabackup is actually installed (see "Check for
+    # mariabackup or xtrabackup" below).
+    xtrabackup_version=$($innobackupex --version 2>&1|grep 'based')
     bulocation="$dirname"
 
     if [ ! -d "$bulocation" ]; then
