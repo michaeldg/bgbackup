@@ -565,16 +565,17 @@ function backup_history_and_mark_failed {
     monthly=0
     yearly=0
 
-    # Michael 2026-09-22: weekly/monthly/yearly is the "keep this one around
-    # longer than keepdaily" flag. Only a Full may carry it -- a
-    # Differential/Incremental depends on an earlier backup for restore, so
-    # marking THE DEPENDENT as the long-lived representative of its calendar
-    # period protects the wrong row and leaves the Full it needs exposed to
-    # ordinary keepdaily-day cleanup whenever a non-Full happens to be first
-    # in that period (e.g. a weekly Full on a day other than the WEEK()
-    # boundary). backup_cleanup's own dependency check (see there) is what
-    # actually keeps a still-depended-on backup safe; this flag is only an
-    # extra, cheaper way to hold onto whole Fulls for longer.
+    # Michael 2026-09-22: weekly/monthly/yearly is a periodic long-term
+    # retention flag (e.g. keep 4 weekly, 3 monthly, 2 yearly Fulls) --
+    # unrelated to backup_cleanup's dependency check. Only a Full may carry
+    # it: a Differential/Incremental is never independently restorable
+    # regardless of this flag, so protecting one long-term without its Full
+    # (and, for an Incremental chain, everything back to it) just keeps a
+    # useless artifact around. Marking whichever backup happened to be first
+    # in a calendar period -- Full or not -- was the bug: on a weekly-Full
+    # schedule where the Full isn't on the WEEK() boundary, an earlier
+    # Differential could claim the flag instead, leaving the actual Full
+    # unprotected here.
     if [ "$butype" = "Full" ]; then
         [ "${keepweekly:-0}" -gt "0" ] && weekly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS weekly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND WEEK(end_time) = WEEK('$endtime') AND status='SUCCEEDED' AND butype='Full' AND weekly=1")
         [ "${keepmonthly:-0}" -gt "0" ] && monthly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS monthly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND MONTH(end_time) = MONTH('$endtime') AND status='SUCCEEDED' AND butype='Full' AND monthly=1")
