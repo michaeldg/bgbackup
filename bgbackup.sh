@@ -608,8 +608,7 @@ EOF
 
 # Does any other backup that is still live (SUCCEEDED, not itself deleted
 # yet) still need $1 (a candidate we are about to delete) to restore? A
-# straight foreign-key check against based_on_uuid, which innocreate/
-# backup_history_and_mark_failed record at backup-creation time.
+# straight foreign-key check against based_on_uuid.
 function backup_has_live_dependent {
     local candidate_uuid="$1"
     local dependent_exists
