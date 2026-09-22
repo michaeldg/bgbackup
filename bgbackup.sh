@@ -287,8 +287,7 @@ function innocreate {
         if [ "$differential" = yes ] ; then
             butype=Differential
             # uuid alongside bulocation: recorded as based_on_uuid below, so
-            # backup_has_live_dependent can check an actual foreign key
-            # instead of reconstructing "what was this based on" later.
+            # backup_has_live_dependent can check an actual foreign key.
             IFS=$'\t' read -r basebackupuuid diffbase <<< "$($mysqlhistcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")"
             dirname="$backupdir/diff-$dirdate"
 
@@ -507,9 +506,8 @@ EOF
 
 # Michael 2026-09-22: based_on_uuid records the uuid of the backup this one
 # was actually taken against (diffbase/incbase in innocreate), NULL for a
-# Full. Lets backup_cleanup check an actual recorded fact -- "does any live
-# row have based_on_uuid pointing at this candidate" -- instead of
-# reconstructing the relationship from timestamps after the fact.
+# Full. Lets backup_cleanup check an actual recorded fact: does any live
+# row have based_on_uuid pointing at this candidate.
 function migrate_history_table_based_on_uuid {
     $mysqlhistcommand "ALTER TABLE $backuphistschema.backup_history ADD COLUMN based_on_uuid varchar(40) DEFAULT NULL, ADD INDEX based_on_uuid (based_on_uuid)" >> "$logfile"
     log_info "backup history table migrated: added based_on_uuid"
@@ -610,8 +608,7 @@ EOF
 # Does any other backup that is still live (SUCCEEDED, not itself deleted
 # yet) still need $1 (a candidate we are about to delete) to restore? A
 # straight foreign-key check against based_on_uuid, which innocreate/
-# backup_history_and_mark_failed record at backup-creation time -- no need
-# to reconstruct anything from timestamps after the fact.
+# backup_history_and_mark_failed record at backup-creation time.
 function backup_has_live_dependent {
     local candidate_uuid="$1"
     local dependent_exists
