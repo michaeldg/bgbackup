@@ -525,9 +525,21 @@ function backup_history_and_mark_failed {
     monthly=0
     yearly=0
 
-    [ "${keepweekly:-0}" -gt "0" ] && weekly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS weekly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND WEEK(end_time) = WEEK('$endtime') AND status='SUCCEEDED' AND weekly=1")
-    [ "${keepmonthly:-0}" -gt "0" ] && monthly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS monthly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND MONTH(end_time) = MONTH('$endtime') AND status='SUCCEEDED' AND monthly=1")
-    [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND yearly=1")
+    # Michael 2026-09-22: weekly/monthly/yearly is the "keep this one around
+    # longer than keepdaily" flag. Only a Full may carry it -- a
+    # Differential/Incremental depends on an earlier backup for restore, so
+    # marking THE DEPENDENT as the long-lived representative of its calendar
+    # period protects the wrong row and leaves the Full it needs exposed to
+    # ordinary keepdaily-day cleanup whenever a non-Full happens to be first
+    # in that period (e.g. a weekly Full on a day other than the WEEK()
+    # boundary). backup_cleanup's own dependency check (see there) is what
+    # actually keeps a still-depended-on backup safe; this flag is only an
+    # extra, cheaper way to hold onto whole Fulls for longer.
+    if [ "$butype" = "Full" ]; then
+        [ "${keepweekly:-0}" -gt "0" ] && weekly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS weekly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND WEEK(end_time) = WEEK('$endtime') AND status='SUCCEEDED' AND butype='Full' AND weekly=1")
+        [ "${keepmonthly:-0}" -gt "0" ] && monthly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS monthly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND MONTH(end_time) = MONTH('$endtime') AND status='SUCCEEDED' AND butype='Full' AND monthly=1")
+        [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND butype='Full' AND yearly=1")
+    fi
 
     historyinsert=$(cat <<EOF
 INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
@@ -553,6 +565,52 @@ EOF
     fi
 }
 
+# Does any other backup that is still live (SUCCEEDED, not itself deleted
+# yet) still need $1 (a candidate we are about to delete) to restore?
+#
+# backup_history never records which backup another backup was actually
+# taken against, so this reconstructs it from timestamps the same way
+# innocreate itself picks a base -- using the dependent's OWN butype to
+# pick the rule, exactly like innocreate's diffbase/incbase queries do:
+#   - a Differential's base is the latest Full at or before it (diffbase
+#     filters butype = 'Full' -- Differentials are independent siblings of
+#     each other, all based on the same Full, never chained to each other)
+#   - an Incremental's base is the latest backup of ANY type at or before
+#     it (incbase has no butype filter -- a true chain)
+# Collapsing this into one "nearest preceding backup of any type" rule is
+# wrong: it would make consecutive Differentials look chained to each
+# other (nothing else sits between them chronologically), which blocks
+# deletion of every Differential for as long as a newer one survives --
+# defeating retention entirely instead of just protecting real dependents.
+# Rows are never removed from backup_history, only flagged via deleted_at,
+# so this reconstruction stays correct no matter what has already been
+# deleted.
+function backup_has_live_dependent {
+    local candidate_uuid="$1" candidate_hostname="$2" candidate_butype="$3" candidate_start_time="$4"
+    local dependent_exists
+    dependent_exists=$($mysqlhistcommand "SELECT EXISTS (
+        SELECT 1 FROM $backuphistschema.backup_history r
+        WHERE r.hostname = '$candidate_hostname'
+          AND r.status = 'SUCCEEDED'
+          AND r.deleted_at IS NULL
+          AND r.uuid <> '$candidate_uuid'
+          AND r.start_time >= '$candidate_start_time'
+          AND (
+                ( r.butype = 'Differential' AND '$candidate_butype' = 'Full' AND '$candidate_start_time' = (
+                      SELECT MAX(f.start_time) FROM $backuphistschema.backup_history f
+                      WHERE f.hostname = r.hostname AND f.butype = 'Full' AND f.status = 'SUCCEEDED'
+                        AND f.start_time <= r.start_time
+                  ) )
+             OR ( r.butype = 'Incremental' AND '$candidate_start_time' = (
+                      SELECT MAX(a.start_time) FROM $backuphistschema.backup_history a
+                      WHERE a.hostname = r.hostname AND a.status = 'SUCCEEDED'
+                        AND a.start_time <= r.start_time AND a.uuid <> r.uuid
+                  ) )
+          )
+    )")
+    [ "$dependent_exists" = "1" ]
+}
+
 # Function to cleanup backups.
 function backup_cleanup {
     if [ $log_status = "SUCCEEDED" ]; then
@@ -567,14 +625,26 @@ function backup_cleanup {
         $mysqlhistcommand "UPDATE $backuphistschema.backup_history SET yearly=2 WHERE ${siblings_hostname_where} AND UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP() - (86400*366 * ($keepyearly + 1))"
 
         log_info "Checking backups to clean up - $keepdaily days to keep."
-        delcount=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND ${siblings_hostname_where} and UNIX_TIMESTAMP(end_time) < UNIX_TIMESTAMP()-(3600 + (86400 * $keepdaily)) AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-        if [ -n "$delcount" ] && [ "$delcount" -gt 0 ]; then
-            deletecmd=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < CAST(DATE_SUB(CURDATE(), INTERVAL $keepdaily DAY) AS DATETIME) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL")
-            while IFS= read -r todelete; do
+        # Newest-first: a candidate is only deleted once nothing live still
+        # depends on it, and each deletion is committed immediately (not
+        # batched), so an older base becomes eligible in the same pass as
+        # soon as every backup still depending on it has itself been
+        # deleted -- a fully-expired chain collapses in one run instead of
+        # one level per day.
+        deletecmd=$($mysqlhistcommand "SELECT uuid, hostname, butype, start_time, bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < CAST(DATE_SUB(CURDATE(), INTERVAL $keepdaily DAY) AS DATETIME) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL ORDER BY end_time DESC")
+        if [ -n "$deletecmd" ]; then
+            skipped=0
+            while IFS=$'\t' read -r deluuid delhostname delbutype delstarttime todelete; do
+                if backup_has_live_dependent "$deluuid" "$delhostname" "$delbutype" "$delstarttime"; then
+                    log_info "Keeping $todelete past its retention window: another retained backup still depends on it."
+                    skipped=$((skipped + 1))
+                    continue
+                fi
                 log_info "Deleted backup $todelete"
                 rm -Rf "$todelete"
-                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation = '$todelete' AND ${siblings_hostname_where} AND status = 'SUCCEEDED'")
+                markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE uuid = '$deluuid'")
             done <<< "$deletecmd"
+            [ "$skipped" -gt 0 ] && log_info "$skipped backup(s) past retention were kept because a newer, still-retained backup depends on them."
         else
             log_info "No backups to delete at this time."
         fi
