@@ -21,6 +21,18 @@ function sigint {
   exit 130
 }
 
+# Safety net: if backer_upper stopped the replica SQL thread and never got a chance to start it
+# again (Ctrl-C, an unexpected exit/crash mid-backup, ...), start it here. Called from the exit
+# trap so this runs no matter how the script leaves that window -- normal completion, SIGINT, an
+# untrapped SIGTERM, or log_error's exit 1. Can't help against SIGKILL, nothing can.
+function restore_slave_sql_thread_if_needed {
+    if [ "$sql_thread_stop_pending" = "yes" ] ; then
+        log_info "Restarting replica SQL thread (safety net on exit)."
+        $mysqltargetcommand "START SLAVE SQL_THREAD;"
+        sql_thread_stop_pending=no
+    fi
+}
+
 # Mail function
 function mail_log {
     mail -s "$mailsubpre $HOSTNAME ${instance_name:-mysql} Backup $log_status $mdate" "$maillist" < "$logfile"
@@ -351,10 +363,21 @@ function backer_upper {
         log_info "Enabling WSREP desync."
         $mysqltargetcommand "SET GLOBAL wsrep_desync=ON"
     fi
+    if [ "$stop_slave_sql_thread" = yes ] ; then
+        log_info "Stopping replica SQL thread."
+        $mysqltargetcommand "STOP SLAVE SQL_THREAD;"
+        sql_thread_stop_pending=yes
+    fi
     log_info "Beginning ${butype} Backup"
     log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=.* /password=XXX /g')"
     $innocommand 2>> "$logfile"
     log_check
+
+    if [ "$stop_slave_sql_thread" = yes ] ; then
+        log_info "Starting replica SQL thread."
+        $mysqltargetcommand "START SLAVE SQL_THREAD;"
+        sql_thread_stop_pending=no
+    fi
 
     if [ "$galera" = yes ] ; then
         log_info "Disabling WSREP desync."
@@ -390,6 +413,7 @@ function backup_write_config {
     echo "#cryptkey=your_crypt_key" >> $conf_file_path
     echo "galera=${galera@Q}" >> $conf_file_path
     echo "slave=${slave@Q}" >> $conf_file_path
+    echo "stop_slave_sql_thread=${stop_slave_sql_thread@Q}" >> $conf_file_path
     echo "end_time=${endtime@Q}" >> $conf_file_path
     if [ "$butype" = "Differential" ]; then
         echo "incbase=${diffbase@Q}" >> $conf_file_path
@@ -719,6 +743,13 @@ function config_check {
         fi
     fi
 
+    if [ "$stop_slave_sql_thread" = "yes" ]; then
+        is_replica=$($mysqltargetcommand "SHOW SLAVE STATUS" | wc -l)
+        if [ "$is_replica" -eq 0 ]; then
+            log_info "Stopping the replica SQL thread is enabled, but this host does not appear to be a replica (SHOW SLAVE STATUS returned nothing). Not stopping the replica SQL thread."
+            stop_slave_sql_thread="no"
+        fi
+    fi
 
     # Verify if fullbackupday is set correctly
     found_fullbackup_timing=false
@@ -812,6 +843,7 @@ function debugme {
     log_info "tempfolder: " "$tempfolder"
     log_info "galera: " "$galera"
     log_info "slave: " "$slave"
+    log_info "stop_slave_sql_thread: " "$stop_slave_sql_thread"
     log_info "maillist: " "$maillist"
     log_info "mailsubpre: " "$mailsubpre"
     log_info "mdate: " "$mdate"
@@ -967,7 +999,7 @@ if [ -f $lockfile ]
 then
     log_error "Another instance of $lockfile is already running. Exiting."
 fi
-trap 'rm -f $lockfile' 0
+trap 'restore_slave_sql_thread_if_needed; rm -f $lockfile' 0
 touch $lockfile
 
 generate_hostname_where
