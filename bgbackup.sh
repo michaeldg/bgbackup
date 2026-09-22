@@ -270,10 +270,14 @@ function innocreate {
         butype=Full
         dirname="$backupdir/full-$dirdate"
         innocommand="$innocommand $dirname"
+        basebackupuuid=""
     else
         if [ "$differential" = yes ] ; then
             butype=Differential
-            diffbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+            # uuid alongside bulocation: recorded as based_on_uuid below, so
+            # backup_has_live_dependent can check an actual foreign key
+            # instead of reconstructing "what was this based on" later.
+            IFS=$'\t' read -r basebackupuuid diffbase <<< "$($mysqlhistcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND butype = 'Full' AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")"
             dirname="$backupdir/diff-$dirdate"
 
             if [ -d "$diffbase" ] && ! differential_upgrade_needed && ! differential_version_mismatch ; then
@@ -285,10 +289,11 @@ function innocreate {
                 butype=Full
                 dirname="$backupdir/full-$dirdate"
                 innocommand="$innocommand $dirname"
+                basebackupuuid=""
             fi
         else
             butype=Incremental
-            incbase=$($mysqlhistcommand "SELECT bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")
+            IFS=$'\t' read -r basebackupuuid incbase <<< "$($mysqlhistcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL ORDER BY start_time DESC LIMIT 1")"
             if [ -d "$incbase" ]; then
                 dirname="$backupdir/incr-$dirdate"
                 innocommand="$innocommand $dirname"
@@ -299,6 +304,7 @@ function innocreate {
                 butype=Full
                 dirname="$backupdir/full-$dirdate"
                 innocommand="$innocommand $dirname"
+                basebackupuuid=""
             fi
         fi
     fi
@@ -463,14 +469,26 @@ xtrabackup_version varchar(120) DEFAULT NULL,
 server_version varchar(120) DEFAULT NULL,
 backup_size varchar(20) DEFAULT NULL,
 deleted_at timestamp NULL DEFAULT NULL,
+based_on_uuid varchar(40) DEFAULT NULL,
 PRIMARY KEY (uuid),
 INDEX hostname_endtime (hostname, end_time),
-INDEX hostname_status_deleted (hostname, status, deleted_at)
+INDEX hostname_status_deleted (hostname, status, deleted_at),
+INDEX based_on_uuid (based_on_uuid)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8
 EOF
 )
     $mysqlhistcommand "$createtable" >> "$logfile"
     log_info "backup history table created"
+}
+
+# Michael 2026-09-22: based_on_uuid records the uuid of the backup this one
+# was actually taken against (diffbase/incbase in innocreate), NULL for a
+# Full. Lets backup_cleanup check an actual recorded fact -- "does any live
+# row have based_on_uuid pointing at this candidate" -- instead of
+# reconstructing the relationship from timestamps after the fact.
+function migrate_history_table_based_on_uuid {
+    $mysqlhistcommand "ALTER TABLE $backuphistschema.backup_history ADD COLUMN based_on_uuid varchar(40) DEFAULT NULL, ADD INDEX based_on_uuid (based_on_uuid)" >> "$logfile"
+    log_info "backup history table migrated: added based_on_uuid"
 }
 
 function migrate_history_table {
@@ -542,8 +560,8 @@ function backup_history_and_mark_failed {
     fi
 
     historyinsert=$(cat <<EOF
-INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at)
-VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
+INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at, based_on_uuid)
+VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL, NULLIF("${basebackupuuid:-}", ""))
 EOF
 )
     $mysqlhistcommand "$historyinsert"
@@ -566,47 +584,18 @@ EOF
 }
 
 # Does any other backup that is still live (SUCCEEDED, not itself deleted
-# yet) still need $1 (a candidate we are about to delete) to restore?
-#
-# backup_history never records which backup another backup was actually
-# taken against, so this reconstructs it from timestamps the same way
-# innocreate itself picks a base -- using the dependent's OWN butype to
-# pick the rule, exactly like innocreate's diffbase/incbase queries do:
-#   - a Differential's base is the latest Full at or before it (diffbase
-#     filters butype = 'Full' -- Differentials are independent siblings of
-#     each other, all based on the same Full, never chained to each other)
-#   - an Incremental's base is the latest backup of ANY type at or before
-#     it (incbase has no butype filter -- a true chain)
-# Collapsing this into one "nearest preceding backup of any type" rule is
-# wrong: it would make consecutive Differentials look chained to each
-# other (nothing else sits between them chronologically), which blocks
-# deletion of every Differential for as long as a newer one survives --
-# defeating retention entirely instead of just protecting real dependents.
-# Rows are never removed from backup_history, only flagged via deleted_at,
-# so this reconstruction stays correct no matter what has already been
-# deleted.
+# yet) still need $1 (a candidate we are about to delete) to restore? A
+# straight foreign-key check against based_on_uuid, which innocreate/
+# backup_history_and_mark_failed record at backup-creation time -- no need
+# to reconstruct anything from timestamps after the fact.
 function backup_has_live_dependent {
-    local candidate_uuid="$1" candidate_hostname="$2" candidate_butype="$3" candidate_start_time="$4"
+    local candidate_uuid="$1"
     local dependent_exists
     dependent_exists=$($mysqlhistcommand "SELECT EXISTS (
-        SELECT 1 FROM $backuphistschema.backup_history r
-        WHERE r.hostname = '$candidate_hostname'
-          AND r.status = 'SUCCEEDED'
-          AND r.deleted_at IS NULL
-          AND r.uuid <> '$candidate_uuid'
-          AND r.start_time >= '$candidate_start_time'
-          AND (
-                ( r.butype = 'Differential' AND '$candidate_butype' = 'Full' AND '$candidate_start_time' = (
-                      SELECT MAX(f.start_time) FROM $backuphistschema.backup_history f
-                      WHERE f.hostname = r.hostname AND f.butype = 'Full' AND f.status = 'SUCCEEDED'
-                        AND f.start_time <= r.start_time
-                  ) )
-             OR ( r.butype = 'Incremental' AND '$candidate_start_time' = (
-                      SELECT MAX(a.start_time) FROM $backuphistschema.backup_history a
-                      WHERE a.hostname = r.hostname AND a.status = 'SUCCEEDED'
-                        AND a.start_time <= r.start_time AND a.uuid <> r.uuid
-                  ) )
-          )
+        SELECT 1 FROM $backuphistschema.backup_history
+        WHERE based_on_uuid = '$candidate_uuid'
+          AND status = 'SUCCEEDED'
+          AND deleted_at IS NULL
     )")
     [ "$dependent_exists" = "1" ]
 }
@@ -631,11 +620,11 @@ function backup_cleanup {
         # soon as every backup still depending on it has itself been
         # deleted -- a fully-expired chain collapses in one run instead of
         # one level per day.
-        deletecmd=$($mysqlhistcommand "SELECT uuid, hostname, butype, start_time, bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < CAST(DATE_SUB(CURDATE(), INTERVAL $keepdaily DAY) AS DATETIME) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL ORDER BY end_time DESC")
+        deletecmd=$($mysqlhistcommand "SELECT uuid, bulocation FROM $backuphistschema.backup_history WHERE yearly <> 1 AND monthly <> 1 AND weekly <> 1 AND end_time < CAST(DATE_SUB(CURDATE(), INTERVAL $keepdaily DAY) AS DATETIME) AND ${siblings_hostname_where} AND status = 'SUCCEEDED' AND deleted_at IS NULL ORDER BY end_time DESC")
         if [ -n "$deletecmd" ]; then
             skipped=0
-            while IFS=$'\t' read -r deluuid delhostname delbutype delstarttime todelete; do
-                if backup_has_live_dependent "$deluuid" "$delhostname" "$delbutype" "$delstarttime"; then
+            while IFS=$'\t' read -r deluuid todelete; do
+                if backup_has_live_dependent "$deluuid"; then
                     log_info "Keeping $todelete past its retention window: another retained backup still depends on it."
                     skipped=$((skipped + 1))
                     continue
@@ -1026,6 +1015,11 @@ if [[ "${mysqlhist_is_down:-0}" == "0" ]]; then
     need_migrate_table=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='weekly'")
     if [ "$need_migrate_table" -eq 0 ]; then
         migrate_history_table # Migrate history table if it is old version
+    fi
+
+    need_migrate_table_based_on_uuid=$($mysqlhistcommand "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='$backuphistschema' AND table_name='backup_history' AND column_name='based_on_uuid'")
+    if [ "$need_migrate_table_based_on_uuid" -eq 0 ]; then
+        migrate_history_table_based_on_uuid # Migrate history table if it predates based_on_uuid
     fi
 fi
 
