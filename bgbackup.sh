@@ -504,10 +504,8 @@ EOF
     log_info "backup history table created"
 }
 
-# Michael 2026-09-22: based_on_uuid records the uuid of the backup this one
-# was actually taken against (diffbase/incbase in innocreate), NULL for a
-# Full. Lets backup_cleanup check an actual recorded fact: does any live
-# row have based_on_uuid pointing at this candidate.
+# Michael 2026-09-22: adds based_on_uuid (see innocreate,
+# backup_has_live_dependent) for a table that predates it.
 function migrate_history_table_based_on_uuid {
     $mysqlhistcommand "ALTER TABLE $backuphistschema.backup_history ADD COLUMN based_on_uuid varchar(40) DEFAULT NULL, ADD INDEX based_on_uuid (based_on_uuid)" >> "$logfile"
     log_info "backup history table migrated: added based_on_uuid"
@@ -565,17 +563,14 @@ function backup_history_and_mark_failed {
     monthly=0
     yearly=0
 
-    # Michael 2026-09-22: weekly/monthly/yearly is a periodic long-term
-    # retention flag (e.g. keep 4 weekly, 3 monthly, 2 yearly Fulls) --
-    # unrelated to backup_cleanup's dependency check. Only a Full may carry
-    # it: a Differential/Incremental is never independently restorable
-    # regardless of this flag, so protecting one long-term without its Full
-    # (and, for an Incremental chain, everything back to it) just keeps a
-    # useless artifact around. Marking whichever backup happened to be first
-    # in a calendar period -- Full or not -- was the bug: on a weekly-Full
-    # schedule where the Full isn't on the WEEK() boundary, an earlier
-    # Differential could claim the flag instead, leaving the actual Full
-    # unprotected here.
+    # Michael 2026-09-22: weekly/monthly/yearly is periodic long-term
+    # retention (e.g. keep 4 weekly, 3 monthly, 2 yearly Fulls), unrelated
+    # to backup_cleanup's dependency check. Full-only: a Differential/
+    # Incremental is never independently restorable, so protecting one
+    # long-term without its Full is a useless artifact. Previously any
+    # butype could claim the flag for being first in a calendar period,
+    # which could leave the actual Full unprotected on a weekly-Full
+    # schedule not aligned to WEEK()'s Sunday boundary.
     if [ "$butype" = "Full" ]; then
         [ "${keepweekly:-0}" -gt "0" ] && weekly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS weekly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND WEEK(end_time) = WEEK('$endtime') AND status='SUCCEEDED' AND butype='Full' AND weekly=1")
         [ "${keepmonthly:-0}" -gt "0" ] && monthly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS monthly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND MONTH(end_time) = MONTH('$endtime') AND status='SUCCEEDED' AND butype='Full' AND monthly=1")
