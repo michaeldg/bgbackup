@@ -479,6 +479,7 @@ bulocation varchar(255) DEFAULT NULL,
 logfile varchar(255) DEFAULT NULL,
 status varchar(25) DEFAULT NULL,
 butype varchar(20) DEFAULT NULL,
+based_on_uuid varchar(40) DEFAULT NULL,
 weekly tinyint UNSIGNED NOT NULL,
 monthly tinyint UNSIGNED NOT NULL,
 yearly tinyint UNSIGNED NOT NULL,
@@ -492,7 +493,6 @@ xtrabackup_version varchar(120) DEFAULT NULL,
 server_version varchar(120) DEFAULT NULL,
 backup_size varchar(20) DEFAULT NULL,
 deleted_at timestamp NULL DEFAULT NULL,
-based_on_uuid varchar(40) DEFAULT NULL,
 PRIMARY KEY (uuid),
 INDEX hostname_endtime (hostname, end_time),
 INDEX hostname_status_deleted (hostname, status, deleted_at),
@@ -507,7 +507,7 @@ EOF
 # Michael 2026-09-22: adds based_on_uuid (see innocreate,
 # backup_has_live_dependent) for a table that predates it.
 function migrate_history_table_based_on_uuid {
-    $mysqlhistcommand "ALTER TABLE $backuphistschema.backup_history ADD COLUMN based_on_uuid varchar(40) DEFAULT NULL, ADD INDEX based_on_uuid (based_on_uuid)" >> "$logfile"
+    $mysqlhistcommand "ALTER TABLE $backuphistschema.backup_history ADD COLUMN based_on_uuid varchar(40) DEFAULT NULL AFTER butype, ADD INDEX based_on_uuid (based_on_uuid)" >> "$logfile"
     log_info "backup history table migrated: added based_on_uuid"
 }
 
