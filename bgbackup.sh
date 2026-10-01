@@ -266,16 +266,10 @@ function innocreate {
     if [[ "${mysqlhist_is_down:-0}" == "0" ]]; then
         alreadyfulltoday=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
         alreadyfullthisweek=$($mysqlhistcommand "SELECT COUNT(*) FROM $backuphistschema.backup_history WHERE UNIX_TIMESTAMP(end_time) > UNIX_TIMESTAMP() - 604800 AND butype = 'Full' AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
-        # Michael 2026-09-30: which successful backup of the calendar day this
-        # one is (1 = first, usually the Full). Recorded into this backup's own
-        # bgbackup.cnf so a restore-side copy script can pick "the Nth backup
-        # of the day" without re-deriving it from directory-name timestamps.
-        dailysequence=$($mysqlhistcommand "SELECT COUNT(*) + 1 FROM $backuphistschema.backup_history WHERE DATE(end_time) = CURDATE() AND status = 'SUCCEEDED' AND ${this_hostname_where} AND deleted_at IS NULL")
     else
         log_info "No history server found, so we cannot detect if a full backup already  ran today or this week. Pull requests are welcome to implement  this."
         alreadyfulltoday=0
         alreadyfullthisweek=0
-        dailysequence=0
     fi
 
     if ( [ "$(date +%A)" = "$fullbackupday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || ( [ "$fullbackupday" = "Everyday" ] && [ "$alreadyfulltoday" -eq 0 ] ) || [ "$fullbackupday" = "Always" ] || [ "$force" == "1" ]; then
@@ -420,7 +414,6 @@ function backup_write_config {
     echo "slave=${slave@Q}" >> $conf_file_path
     echo "stop_slave_sql_thread=${stop_slave_sql_thread@Q}" >> $conf_file_path
     echo "end_time=${endtime@Q}" >> $conf_file_path
-    echo "daily_sequence=${dailysequence@Q}" >> $conf_file_path
     if [ "$butype" = "Differential" ]; then
         echo "incbase=${diffbase@Q}" >> $conf_file_path
     elif [ "$butype" == "Incremental" ]; then
