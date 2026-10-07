@@ -330,7 +330,7 @@ function innocreate {
     if [ "$slave" = yes ] ; then innocommand=$innocommand" --slave-info" ; fi
     if [ "$parallel" = yes ] ; then innocommand=$innocommand" --parallel=$threads" ; fi
     if [ "$compress" = yes ] ; then innocommand=$innocommand" --compress --compress-threads=$threads" ; fi
-    if [ "$encrypt" = yes ] ; then innocommand=$innocommand" --encrypt=AES256 --encrypt-key=${cryptkey@Q}" ; fi
+    if [ "$encrypt" = yes ] ; then innocommand=$innocommand" --encrypt=AES256 --encrypt-key=$cryptkey" ; fi
     if [ "$nolock" = yes ] ; then innocommand=$innocommand" --no-lock" ; fi
     if [ "$nolock" = yes ] && [ "$slave" = yes ] ; then innocommand=$innocommand" --safe-slave-backup" ; fi
     if [ "$rocksdb" = no ] && [ "$backuptool" = "1" ]; then innocommand=$innocommand" --skip-rocksdb-backup" ; fi
