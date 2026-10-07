@@ -368,7 +368,13 @@ function backer_upper {
         sql_thread_stop_pending=yes
     fi
     log_info "Beginning ${butype} Backup"
-    log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=.* /password=XXX /g')"
+    # [^ ]*, not .* -- .* is greedy and backtracks to the LAST space in the
+    # whole line, not the first one after the password, so it was
+    # swallowing every flag that innocreate appends after --password=
+    # (--socket, --slave-info, --parallel, --no-lock, --safe-slave-backup,
+    # --skip-rocksdb-backup, ...) into the "XXX" replacement -- the actual
+    # $innocommand run below was never affected, only this log line.
+    log_info "Executing $(basename $innobackupex) command: $(echo "$innocommand" | sed -e 's/password=[^ ]*/password=XXX/g')"
     $innocommand 2>> "$logfile"
     log_check
 
