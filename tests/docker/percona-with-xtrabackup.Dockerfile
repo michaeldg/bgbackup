@@ -15,14 +15,23 @@
 # percona-server:8.0 doesn't already carry (a private, versioned
 # libprotobuf-lite bundled next to xtrabackup) out of that image.
 #
+# xtrabackup's own --decrypt/--decompress modes (used by the restore-side
+# round-trip checks in the encryption/compression tests) shell out to the
+# external `xbcrypt` and `zstd` binaries rather than handling either
+# in-process, so both need to be present too: xbcrypt is copied from the
+# same xtrabackup image for the same reason as the binary itself, and zstd
+# installs cleanly from the UBI base repo (unlike percona-xtrabackup-80,
+# it has no unresolvable dependency).
+#
 # Build once: docker build -f tests/docker/percona-with-xtrabackup.Dockerfile -t bgbackup-test-percona-xtrabackup:local tests/docker
 FROM percona/percona-xtrabackup:8.0 AS xtrabackup
 
 FROM percona/percona-server:8.0
 USER root
 COPY --from=xtrabackup /usr/bin/xtrabackup /usr/bin/xtrabackup
+COPY --from=xtrabackup /usr/bin/xbcrypt /usr/bin/xbcrypt
 COPY --from=xtrabackup /usr/lib/private/libprotobuf-lite.so.3.19.4 /usr/lib/private/libprotobuf-lite.so.3.19.4
 RUN ldconfig && \
-    microdnf install -y bc >/dev/null 2>&1 && \
+    microdnf install -y bc zstd >/dev/null 2>&1 && \
     microdnf clean all >/dev/null 2>&1
 USER mysql
