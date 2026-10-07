@@ -674,6 +674,16 @@ function backup_failed_cleanup {
         if [ -n "$findfailedcmd" ]; then
             while IFS= read -r todelete; do
                 rm -Rf "$todelete"
+                # BUG: $todelete is already the full path (find was given
+                # backupdir as an absolute path, so it returns one), the
+                # same string bulocation already holds -- "%/$todelete"
+                # therefore asks for a bulocation ending in a DOUBLE slash
+                # before it, which a normal single-leading-slash bulocation
+                # never matches. This UPDATE matches zero rows in any
+                # deployment with an absolute backupdir (the documented
+                # default): the directory is really deleted, but
+                # deleted_at is never set, leaving a stale row pointing at
+                # a now-nonexistent path.
                 markdeleted=$($mysqlhistcommand "UPDATE $backuphistschema.backup_history SET deleted_at = NOW() WHERE bulocation LIKE '%/$todelete' AND ${siblings_hostname_where}")
                 log_info "Deleted failed backup $todelete"
             done <<< "$findfailedcmd"
