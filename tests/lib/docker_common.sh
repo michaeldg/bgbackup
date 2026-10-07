@@ -147,12 +147,15 @@ tdc_cleanup() {
 # Extracts one function's source out of bgbackup.sh by name, the same way
 # tests/test_expand_hour_spec.sh does it, so a test exercises the exact
 # function currently shipped instead of a hand-copied drift-prone copy.
-# Only safe for functions that end with a line containing exactly "}" at
-# column 0 (true of every function in bgbackup.sh at the time of writing).
+# Matches both definition styles bgbackup.sh actually uses -- "function foo {"
+# and "function foo() {" -- so callers don't need to know which one a given
+# function happens to use. Only safe for functions that end with a line
+# containing exactly "}" at column 0 (true of every function in bgbackup.sh
+# at the time of writing).
 tdc_extract_function() {
     local func_name="$1" bgbackup_sh="$2"
     awk -v fn="$func_name" '
-        $0 ~ "^function " fn "[[:space:]]*\\{" { found = 1 }
+        $0 ~ "^function " fn "[[:space:]]*(\\(\\))?[[:space:]]*\\{" { found = 1 }
         found { print; if ($0 == "}") exit }
     ' "$bgbackup_sh"
 }
