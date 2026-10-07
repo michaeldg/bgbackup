@@ -434,6 +434,12 @@ function mysqlhistcreate {
     [ -n "$backuphisthost" ] && mysqlhistcommand=$mysqlhistcommand" -h$backuphisthost"
     [ -n "$backuphistpass" ] && mysqlhistcommand=$mysqlhistcommand" -p$backuphistpass"
     [ -n "$backuphistport" ] && mysqlhistcommand=$mysqlhistcommand" -P $backuphistport"
+    # BUG: builds mysqltargetcommand, not mysqlhistcommand, unlike every
+    # other line in this function -- backuphistsocket never reaches the
+    # history connection command. Currently inert: mysqltargetcreate()
+    # unconditionally rebuilds mysqltargetcommand from scratch before it's
+    # ever used, which discards this. Would silently break backup-history
+    # connectivity over a socket if that call order ever changed.
     [ -n "$backuphistsocket" ] && mysqltargetcommand=$mysqltargetcommand" -S $backuphistsocket"
     mysqlhistcommand=$mysqlhistcommand" -Bse "
 }
