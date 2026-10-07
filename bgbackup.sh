@@ -388,6 +388,19 @@ function backer_upper {
         log_info "Disabling WSREP desync."
         queue=1
         until [ "$queue" -eq 0 ]; do
+            # BUG: missing space before the opening quote means
+            # $mysqltargetcommand's value (ends in "-Bse ", a trailing
+            # space) and this literal glue into ONE malformed argument --
+            # literal backslash-escaped quote characters and the trailing
+            # "-ss" all end up INSIDE what mysql receives as the SQL text
+            # (confirmed against a real server: ERROR 1064, not a queue
+            # number). $queue then never becomes a valid integer, so `[
+            # "$queue" -eq 0 ]` fails every time (not "becomes true"), and
+            # this loop never exits -- every galera=yes backup hangs here
+            # forever. Every other $mysqltargetcommand call in this file
+            # (plain `$mysqltargetcommand "SQL;"`, a real space before the
+            # quote) builds its argument correctly; only this one line
+            # doesn't.
             queue=$($mysqltargetcommand" \"show global status like 'wsrep_local_recv_queue';\" -ss" | awk '{ print $2 }')
             log_info "Current queue is $queue, if there is still a queue we wait until we disable desync mode"
             sleep 10
