@@ -678,6 +678,10 @@ function backup_cleanup {
         else
             log_info "No backups to delete at this time."
         fi
+    # BUG: dead branch -- its own condition requires log_status=SUCCEEDED,
+    # which the `if` above already caught, so this never runs. Retention
+    # cleanup above actually runs after every SUCCEEDED run, not only
+    # Full ones, regardless of this text.
     elif [ $log_status = "SUCCEEDED" ] && [ $butype != "Full" ]; then
         log_info "Not deleting any backups as this is not a full backup run."
     else
