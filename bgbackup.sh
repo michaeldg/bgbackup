@@ -330,7 +330,9 @@ function innocreate {
     if [ "$slave" = yes ] ; then innocommand=$innocommand" --slave-info" ; fi
     if [ "$parallel" = yes ] ; then innocommand=$innocommand" --parallel=$threads" ; fi
     if [ "$compress" = yes ] ; then innocommand=$innocommand" --compress --compress-threads=$threads" ; fi
-    if [ "$encrypt" = yes ] ; then innocommand=$innocommand" --encrypt=AES256 --encrypt-key=$cryptkey" ; fi
+    # cryptkey is the path of the key file (see check_encryption_key), so the
+    # key itself never appears on the command line.
+    if [ "$encrypt" = yes ] ; then innocommand=$innocommand" --encrypt=AES256 --encrypt-key-file=$cryptkey" ; fi
     if [ "$nolock" = yes ] ; then innocommand=$innocommand" --no-lock" ; fi
     if [ "$nolock" = yes ] && [ "$slave" = yes ] ; then innocommand=$innocommand" --safe-slave-backup" ; fi
     if [ "$rocksdb" = no ] && [ "$backuptool" = "1" ]; then innocommand=$innocommand" --skip-rocksdb-backup" ; fi
@@ -427,8 +429,8 @@ function backup_write_config {
     echo "server_version=${server_version@Q}" >> $conf_file_path
     echo "compress=${compress@Q}" >> $conf_file_path
     echo "encrypt=${encrypt@Q}" >> $conf_file_path
-    echo "# if encryption is enabled, the following variable must be filled for fgrestore to work:" >> $conf_file_path
-    echo "#cryptkey=your_crypt_key" >> $conf_file_path
+    echo "# Fingerprint of the encryption key, empty when not encrypted (fgrestore -F <key file> prints a key file's fingerprint)" >> $conf_file_path
+    echo "cryptkey_fingerprint=${cryptkey_fingerprint@Q}" >> $conf_file_path
     echo "galera=${galera@Q}" >> $conf_file_path
     echo "slave=${slave@Q}" >> $conf_file_path
     echo "stop_slave_sql_thread=${stop_slave_sql_thread@Q}" >> $conf_file_path
@@ -440,7 +442,7 @@ function backup_write_config {
     fi
 
     log_info "Wrote backup configuration file $conf_file_path"
-    # VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
+    # VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey_fingerprint", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL)
 }
 
 # Function to build mysql history command
@@ -602,9 +604,11 @@ function backup_history_and_mark_failed {
         [ "${keepyearly:-0}" -gt "0" ] && yearly=$($mysqlhistcommand "SELECT IF(COUNT(*) > 0, 0, 1) AS yearly FROM $backuphistschema.backup_history WHERE ${siblings_hostname_where} AND YEAR(end_time) = YEAR('$endtime') AND status='SUCCEEDED' AND butype='Full' AND yearly=1")
     fi
 
+    # The cryptkey column holds the key's fingerprint (see key_fingerprint),
+    # NULL when not encrypting -- never the key or the key file's path.
     historyinsert=$(cat <<EOF
 INSERT INTO $backuphistschema.backup_history (uuid, hostname, start_time, end_time, weekly, monthly, yearly, bulocation, logfile, status, butype, compressed, encrypted, cryptkey, galera, slave, threads, xtrabackup_version, server_version, backup_size, deleted_at, based_on_uuid)
-VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", "$cryptkey", "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL, NULLIF("${basebackupuuid:-}", ""))
+VALUES (UUID(), "$insert_host", "$starttime", "$endtime", "$weekly", "$monthly", "$yearly", "$bulocation", "$logfile", "$log_status", "$butype", "$compress", "$encrypt", NULLIF("${cryptkey_fingerprint:-}", ""), "$galera", "$slave", "$threads", "$xtrabackup_version", "$server_version", "$backup_size", NULL, NULLIF("${basebackupuuid:-}", ""))
 EOF
 )
     $mysqlhistcommand "$historyinsert"
@@ -753,14 +757,41 @@ function log_cleanup {
     fi
 }
 
-# Function to copy and secure log to backup directory
+# Function to copy the log to the backup directory. The log never holds the
+# encryption key (only its fingerprint), so there is nothing to redact.
 function copy_secured_log_to_backup {
     cp "$logfile" "$bulocation/bgbackup.log"
-    if [ "$encrypt" = yes ]; then
-        log_info "Replacing cryptkey in log file"
-        sed "s/${cryptkey}/**REDACTED**/g" "$bulocation/bgbackup.log"
-    fi
     log_info "Copied the log file to the backup directory"
+}
+
+# Prints the fingerprint of the encryption key in file $1: the first 16 hex
+# digits of the SHA-256 of the label "bgbackup key fingerprint v1", a NUL byte
+# and the file's bytes. It identifies a key (in each backup's bgbackup.cnf and
+# in backup_history) without revealing it; the label makes it differ from the
+# key file's plain checksum. fgrestore -F prints the same value for a key
+# file, to find the one that matches a backup. Fails if the file can't be
+# read, rather than print the label's own fingerprint.
+function key_fingerprint {
+    [ -f "$1" ] && [ -r "$1" ] || return 1
+    ( set -o pipefail; { printf 'bgbackup key fingerprint v1\0'; cat -- "$1"; } | sha256sum | cut -c1-16 )
+}
+
+# With encrypt=yes, cryptkey must be the path of a file holding the 32-byte
+# AES256 key (xtrabackup --encrypt-key-file uses its bytes as they are).
+# Called before anything is logged or recorded: an older configuration may
+# still hold the key itself in cryptkey, so no message here shows the value.
+function check_encryption_key {
+    cryptkey_fingerprint=""
+    [ "$encrypt" = yes ] || return 0
+    if [ -z "$cryptkey" ] || [ ! -f "$cryptkey" ] || [ ! -r "$cryptkey" ]; then
+        log_error "Fatal: encrypt=yes, but cryptkey is not the path of a readable key file. cryptkey must name the file holding the encryption key, not the key itself (its value is not shown, in case it is a key). See 'Encryption' in the README."
+    fi
+    local key_size
+    key_size=$(wc -c < "$cryptkey")
+    if [ "$key_size" -ne 32 ]; then
+        log_error "Fatal: the encryption key file named by cryptkey holds $key_size bytes; AES256 needs exactly 32 (a trailing newline counts)."
+    fi
+    cryptkey_fingerprint=$(key_fingerprint "$cryptkey") || log_error "Fatal: could not read the encryption key file named by cryptkey."
 }
 
 # Function to check config parameters
@@ -868,7 +899,7 @@ function debugme {
     log_info "threads: " "$threads"
     log_info "parallel: " "$parallel"
     log_info "encrypt: " "$encrypt"
-    log_info "cryptkey: " "$cryptkey"
+    log_info "cryptkey_fingerprint: " "$cryptkey_fingerprint"
     log_info "nolock: " "$nolock"
     log_info "compress: " "$compress"
     log_info "tempfolder: " "$tempfolder"
@@ -965,6 +996,8 @@ fi
 starttime=$(date +"%Y-%m-%d %H:%M:%S")
 mdate=$(date +%m/%d/%y)    # Date for mail subject. Not in function so set at script start time, not when backup is finished.
 logfile=$logpath/bgbackup_$(date +%Y-%m-%d-%T).log    # logfile
+
+check_encryption_key # Before anything else is logged: refuses a cryptkey that isn't a key file
 
 # verify the backup directory exists
 if [ ! -d "$backupdir" ]

@@ -193,7 +193,8 @@ assert_contains "Full sidecar: galera='no'" "$full_cnf" "galera='no'"
 assert_contains "Full sidecar: slave='no'" "$full_cnf" "slave='no'"
 assert_contains "Full sidecar: stop_slave_sql_thread='no'" "$full_cnf" "stop_slave_sql_thread='no'"
 assert_contains "Full sidecar: end_time field present and quoted" "$full_cnf" "end_time='"
-assert_contains "Full sidecar: carries the cryptkey hint comment" "$full_cnf" "#cryptkey=your_crypt_key"
+assert_contains "Full sidecar: empty key fingerprint (encrypt=no)" "$full_cnf" "cryptkey_fingerprint=''"
+assert_not_contains "Full sidecar: no cryptkey line (neither key nor key file path is recorded)" "$full_cnf" $'\ncryptkey='
 assert_not_contains "Full sidecar: no incbase line (nothing to base on)" "$full_cnf" "incbase="
 
 diff_cnf=$(sidecar_of "$d1_loc")
