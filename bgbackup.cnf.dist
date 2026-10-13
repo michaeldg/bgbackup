@@ -145,7 +145,7 @@ backupdir=/backups
 # Path to keep logs
 logpath=/var/log
 
-# Store log with backup (cryptkey is removed from this log file)
+# Store a copy of the log with the backup
 store_log_with_backup=yes
 
 # Log to syslog
@@ -157,10 +157,16 @@ threads=4
 # Use parallel threads for backup?
 parallel=yes
 
-# Encrypt backup?
+# Encrypt backup? (XtraBackup only, MariaDB Backup cannot encrypt)
 encrypt=yes
 
-# Full path to encryption key
+# Full path to the file holding the encryption key: exactly 32 bytes (AES256),
+# no trailing newline, readable by root only. Create it with:
+#   (umask 077; openssl rand -base64 24 | tr -d '\n' > /etc/my.cnf.d/backupscript.key)
+# A path, not the key itself: with encrypt=yes, bgbackup refuses to start
+# unless this names a readable 32-byte file. The key never appears in the log
+# or the backup history; each backup's bgbackup.cnf and backup_history record
+# the key's fingerprint, not this path (see "Encryption" in the README).
 cryptkey=/etc/my.cnf.d/backupscript.key
 
 # Compress backup?

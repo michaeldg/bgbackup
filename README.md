@@ -56,9 +56,17 @@ Details about each backup are logged in the database (`backuphistschema`.backup_
 
 ### Encryption
 
-xbcrypt encryption is fully supported for directory backup type.
+xbcrypt encryption (AES256) is supported for the directory backup type with xtrabackup; MariaDB Backup cannot encrypt.
 
-Encrypted incremental backups are enabled by decrypting the xtrabackup_checkpoints file. 
+`cryptkey` is the path of the file holding the key, which xtrabackup reads with `--encrypt-key-file`, so the key never appears on a command line, in the log or in the backup history. The file must hold exactly 32 bytes, without a trailing newline, and be readable by root only (see "Continue setup" below). With `encrypt=yes`, bgbackup refuses to start, before logging anything, when `cryptkey` is not the path of a readable 32-byte file; the error message does not show the value, in case it is a key.
+
+Each backup records the fingerprint of its key, not the key or the key file's path: `cryptkey_fingerprint=` in the backup's own `bgbackup.cnf`, and the `cryptkey` column of `backup_history` (NULL when the backup is not encrypted). The fingerprint is the first 16 hex digits of the SHA-256 of the label `bgbackup key fingerprint v1`, a NUL byte and the key file's bytes:
+```
+{ printf 'bgbackup key fingerprint v1\0'; cat /etc/my.cnf.d/backupscript.key; } | sha256sum | cut -c1-16
+```
+On the host that restores, this tells which key file a backup needs when several keys are in use; the restore tool fgrestore prints it with `-F <key file>...`. The label keeps the fingerprint from being the key file's plain checksum, and 16 hex digits (64 bits) tell keys apart while revealing less. Like any fingerprint, it only protects a key that is random: generate keys as shown below, never pick one by hand.
+
+Keep a copy of the key away from the database hosts. Without it, no encrypted backup can be restored.
 
 ### Compression
 
@@ -83,6 +91,18 @@ Optionally set external commands to be run after successful or failed backup, re
 ## Important upgrade notes
 
 If a prior version which used innobackupex's --history option was used, there is a checkmigrate option in the config to migrate those records to the new table.
+
+**Encryption key in a file.** Earlier versions passed `cryptkey` to xtrabackup as the key itself (`--encrypt-key=`), although this README and `bgbackup.cnf.dist` described it as the path of a key file. With `encrypt=yes`, a configuration that holds the key itself in `cryptkey` now makes bgbackup refuse to start. Such a key has been exposed: it was on the command line of every backup, in every log (the redaction of the log copy stored with each backup never worked), in the `cryptkey` column of `backup_history` and in the history dumps bgbackup writes next to the backups. Rotate it:
+
+1. Save the old key in a file, to restore the backups taken with it (the same key read from a file decrypts them), and keep it only as long as those backups are kept:
+   ```
+   (umask 077; . /etc/bgbackup.cnf; printf '%s' "$cryptkey" > /etc/my.cnf.d/backupscript-old.key)
+   ```
+2. Create a new key file (see "Continue setup" below), point `cryptkey` at it, and take a Full backup right away (`bgbackup.sh -f`), so no Differential or Incremental is based on a backup encrypted with the old key.
+3. Clear the old values from `backup_history` (fingerprints, 16 hex digits, are kept), and delete the old logs and the `<backuphistschema>.backup_history-*.sql` dumps in `backupdir` that hold the old key:
+   ```
+   UPDATE mdbutil.backup_history SET cryptkey = NULL WHERE cryptkey IS NOT NULL AND cryptkey NOT REGEXP '^[0-9a-f]{16}$';
+   ```
 
 ## Setup instructions
 
@@ -116,9 +136,9 @@ yum install qpress
 
 **Continue setup**
 
-Use the following to create the encryption key file: <br />
+If you encrypt backups (xtrabackup only), create the encryption key file: 32 random bytes, no trailing newline, readable by root only: <br />
 ```
-echo -n $(openssl rand -base64 24) > /etc/my.cnf.d/backupscript.key
+(umask 077; openssl rand -base64 24 | tr -d '\n' > /etc/my.cnf.d/backupscript.key)
 ```
 
 Create the MDB Utilities schema/database (replace backuphistschema with the value of `backuphistschema`): <br />
@@ -158,8 +178,8 @@ chmod 400 /etc/my.cnf
 chown mysql /etc/my.cnf.d/xtrabackup.cnf
 chmod 400 /etc/my.cnf.d/xtrabackup.cnf
 
-chown mysql /etc/my.cnf.d/backupscript.key
-chmod 400 /etc/my.cnf.d/backupscript.key
+chown root:root /etc/my.cnf.d/backupscript.key
+chmod 600 /etc/my.cnf.d/backupscript.key
 
 chown mysql /etc/bgbackup.cnf
 chmod 400 /etc/bgbackup.cnf
